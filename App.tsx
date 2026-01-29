@@ -46,8 +46,8 @@ const initialState: AppState = {
   transactions: []
 };
 
-// --- SQL Setup Script ---
-const SQL_SETUP = `-- 1. Profiles Table
+// --- SQL Setup Script (Reference only) ---
+const SQL_SETUP = `-- Copy this to Supabase SQL Editor
 CREATE TABLE public.profiles (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   phone text UNIQUE NOT NULL,
@@ -56,7 +56,6 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 2. Businesses Table
 CREATE TABLE public.businesses (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -66,7 +65,6 @@ CREATE TABLE public.businesses (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 3. Transactions Table
 CREATE TABLE public.transactions (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   business_id uuid REFERENCES public.businesses(id) ON DELETE CASCADE,
@@ -77,15 +75,13 @@ CREATE TABLE public.transactions (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- Enable RLS (Optional for MVP, but good practice)
+-- Basic Policies for MVP
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-
--- Allow public access for now (Anonymous Key access)
-CREATE POLICY "Public Profiles Access" ON public.profiles FOR ALL USING (true);
-CREATE POLICY "Public Businesses Access" ON public.businesses FOR ALL USING (true);
-CREATE POLICY "Public Transactions Access" ON public.transactions FOR ALL USING (true);`;
+CREATE POLICY "Public Access" ON public.profiles FOR ALL USING (true);
+CREATE POLICY "Public Access" ON public.businesses FOR ALL USING (true);
+CREATE POLICY "Public Access" ON public.transactions FOR ALL USING (true);`;
 
 // --- Helper Functions ---
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
@@ -149,22 +145,16 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="p-6 bg-purple-600 text-white flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Database size={24} />
-            <h2 className="text-xl font-bold">Supabase Setup Required</h2>
+            <h2 className="text-xl font-bold">Database Setup Guide</h2>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-lg transition-colors">
             <XCircle size={24} />
           </button>
         </div>
         <div className="p-6 overflow-y-auto space-y-6">
-          <div className="space-y-2">
-            <p className="text-slate-600">You need to create the database tables in your Supabase project. Follow these steps:</p>
-            <ol className="list-decimal list-inside text-sm text-slate-500 space-y-1">
-              <li>Open your <strong>Supabase Dashboard</strong></li>
-              <li>Go to the <strong>SQL Editor</strong> tab</li>
-              <li>Click <strong>New Query</strong></li>
-              <li>Paste the code below and click <strong>Run</strong></li>
-            </ol>
-          </div>
+          <p className="text-slate-600 text-sm">
+            If you see connection errors, ensure you've run this SQL in your Supabase SQL Editor:
+          </p>
 
           <div className="relative group">
             <div className="absolute right-4 top-4 z-10">
@@ -173,7 +163,7 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-all active:scale-95"
               >
                 {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                {copied ? 'Copy SQL' : 'Copy SQL'}
+                {copied ? 'Copied!' : 'Copy SQL'}
               </button>
             </div>
             <pre className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-[10px] font-mono text-slate-700 overflow-x-auto whitespace-pre leading-relaxed h-[300px]">
@@ -182,7 +172,7 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
           
           <Button onClick={onClose} className="w-full">
-            I've run the SQL, let's go!
+            Done
           </Button>
         </div>
       </Card>
@@ -224,7 +214,7 @@ const AuthPage: React.FC<{
         .maybeSingle();
 
       if (fetchError) {
-        if (fetchError.message.includes('Could not find the table')) {
+        if (fetchError.message.includes('relation "profiles" does not exist') || fetchError.message.includes('Could not find the table')) {
           onMissingTables();
           throw new Error('Database tables not found. Showing setup guide...');
         }
@@ -246,7 +236,7 @@ const AuthPage: React.FC<{
       setStep('otp');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Database error. Please try again.');
+      setError(err.message || 'Connection error. Ensure your Supabase keys are correct.');
     } finally {
       setIsLoading(false);
     }
@@ -319,18 +309,16 @@ const AuthPage: React.FC<{
                 {isLoading ? <Loader2 className="animate-spin" size={24} /> : <>Continue <ArrowRight size={20} /></>}
               </Button>
 
-              <div className="pt-2">
-                <button 
-                  onClick={() => {
-                    setMode(mode === 'login' ? 'register' : 'login');
-                    setError('');
-                  }}
-                  disabled={isLoading}
-                  className="text-purple-600 font-bold hover:underline disabled:opacity-50"
-                >
-                  {mode === 'login' ? "Don't have an account? Register" : "Already have an account? Sign in"}
-                </button>
-              </div>
+              <button 
+                onClick={() => {
+                  setMode(mode === 'login' ? 'register' : 'login');
+                  setError('');
+                }}
+                disabled={isLoading}
+                className="text-purple-600 font-bold hover:underline disabled:opacity-50 pt-2"
+              >
+                {mode === 'login' ? "Don't have an account? Register" : "Already have an account? Sign in"}
+              </button>
             </div>
           ) : (
             <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -382,7 +370,6 @@ const AuthPage: React.FC<{
               </button>
             </div>
           )}
-          <p className="text-xs text-slate-400 text-center">By continuing, you agree to our Terms of Service.</p>
         </Card>
       </div>
     </div>
@@ -739,7 +726,9 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    if (state.business && state.transactions.length > 0) getBusinessInsight(state.business, state.transactions).then(setInsight);
+    if (state.business && state.transactions.length > 0) {
+      getBusinessInsight(state.business, state.transactions).then(setInsight);
+    }
   }, [state.business, state.transactions]);
 
   useEffect(() => {
@@ -751,7 +740,7 @@ export default function App() {
     try {
       const { data: profile, error: pErr } = await supabase.from('profiles').select('*').eq('phone', phone).maybeSingle();
       if (pErr) {
-        if (pErr.message.includes('Could not find the table')) setShowSetup(true);
+        if (pErr.message.includes('relation "profiles" does not exist') || pErr.message.includes('Could not find the table')) setShowSetup(true);
         throw pErr;
       }
       if (profile) {
@@ -768,8 +757,11 @@ export default function App() {
           transactions: transactions.map(t => ({ id: t.id, userId: phone, type: t.type, amount: t.amount, category: t.category, date: t.date }))
         }));
       }
-    } catch (err) { console.error("Sync error:", err); } 
-    finally { setIsSyncing(false); }
+    } catch (err) { 
+      console.error("Sync error:", err); 
+    } finally { 
+      setIsSyncing(false); 
+    }
   };
 
   const handleAuth = async (phoneNumber: string, name: string, isRegister: boolean) => {
@@ -818,7 +810,6 @@ export default function App() {
 
   const performLogout = () => {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.clear();
     setState({ ...initialState });
     setInsight("Keep up the great work!");
     setShowLogoutConfirm(false);
@@ -836,7 +827,11 @@ export default function App() {
       </Routes>
       {showSetup && <DatabaseSetupModal onClose={() => setShowSetup(false)} />}
       {showLogoutConfirm && <LogoutConfirmModal onConfirm={performLogout} onCancel={() => setShowLogoutConfirm(false)} />}
-      {isSyncing && <div className="fixed top-4 right-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-slate-400 shadow-sm border border-slate-100 flex items-center gap-2"><Loader2 size={10} className="animate-spin" /> SYNCING BACKEND</div>}
+      {isSyncing && (
+        <div className="fixed top-4 right-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-slate-400 shadow-sm border border-slate-100 flex items-center gap-2 animate-pulse">
+          <Loader2 size={10} className="animate-spin" /> SYNCING BACKEND
+        </div>
+      )}
     </HashRouter>
   );
 }

@@ -1,10 +1,20 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Business } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.API_KEY;
+
+if (!apiKey) {
+  console.warn("Gemini API Key missing. Tips will use fallback messages.");
+}
+
+// Initialize if API key exists
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function getBusinessInsight(business: Business, transactions: Transaction[]): Promise<string> {
+  if (!ai) {
+    return "Every entry brings you closer to your business goals. Keep going!";
+  }
+
   const recentTransactions = transactions.slice(-10);
   const sales = recentTransactions.filter(t => t.type === 'sale').reduce((acc, curr) => acc + curr.amount, 0);
   const expenses = recentTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
