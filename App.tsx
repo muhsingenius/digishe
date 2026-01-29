@@ -33,7 +33,8 @@ import {
   Database,
   Copy,
   Check,
-  XCircle
+  XCircle,
+  WifiOff
 } from 'lucide-react';
 import { getBusinessInsight } from './services/geminiService';
 
@@ -46,7 +47,7 @@ const initialState: AppState = {
   transactions: []
 };
 
-// --- SQL Setup Script (Reference only) ---
+// --- SQL Setup Script ---
 const SQL_SETUP = `-- Copy this to Supabase SQL Editor
 CREATE TABLE public.profiles (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -75,7 +76,6 @@ CREATE TABLE public.transactions (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- Basic Policies for MVP
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
@@ -102,6 +102,18 @@ const getWeeklyData = (transactions: Transaction[]) => {
       expenses: daily.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0)
     };
   });
+};
+
+const mapArkeselError = (code: string | number) => {
+  const codeStr = String(code);
+  const errors: Record<string, string> = {
+    '1005': 'Invalid phone number format.',
+    '1007': 'System error: Insufficient SMS balance.',
+    '1104': 'The code you entered is incorrect.',
+    '1105': 'This code has expired. Please request a new one.',
+    '1001': 'Required information is missing.',
+  };
+  return errors[codeStr] || `Authentication error (Code ${codeStr})`;
 };
 
 // --- Components ---
@@ -182,9 +194,9 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 // --- Auth Page ---
 const AuthPage: React.FC<{ 
-  onAuth: (phone: string, name: string, isRegister: boolean) => Promise<void>;
+  onAuthComplete: (userData: any) => void;
   onMissingTables: () => void;
-}> = ({ onAuth, onMissingTables }) => {
+}> = ({ onAuthComplete, onMissingTables }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [phone, setPhone] = useState('');
@@ -207,6 +219,7 @@ const AuthPage: React.FC<{
     setError('');
 
     try {
+      // Step 1: Check if profile exists for Login mode
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('id')
@@ -214,9 +227,9 @@ const AuthPage: React.FC<{
         .maybeSingle();
 
       if (fetchError) {
-        if (fetchError.message.includes('relation "profiles" does not exist') || fetchError.message.includes('Could not find the table')) {
+        if (fetchError.message.includes('relation "profiles" does not exist')) {
           onMissingTables();
-          throw new Error('Database tables not found. Showing setup guide...');
+          return;
         }
         throw fetchError;
       }
@@ -227,33 +240,67 @@ const AuthPage: React.FC<{
         return;
       }
 
-      if (mode === 'register' && data) {
-        setError('Phone number already registered. Please login.');
+      // Step 2: Trigger SMS via Edge Function
+      console.log('Invoking otp-handler function...');
+      const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
+        body: { action: 'send', phone: phone }
+      });
+
+      if (funcError) {
+        console.error('Edge Function Error:', funcError);
+        // Specifically catch the "Failed to send a request" error which is often a CORS or 404 issue
+        if (funcError.message?.includes('Failed to send a request')) {
+          setError('Could not reach the authentication server. Please ensure the "otp-handler" function is deployed in your Supabase dashboard.');
+        } else {
+          setError(`Server Error: ${funcError.message}`);
+        }
         setIsLoading(false);
         return;
       }
 
-      setStep('otp');
+      if (response?.code === '1000' || response?.code === 1000) {
+        setStep('otp');
+      } else if (response?.error) {
+        setError(response.error);
+      } else {
+        setError(mapArkeselError(response?.code || 'unknown'));
+      }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Connection error. Ensure your Supabase keys are correct.');
+      console.error('Auth Exception:', err);
+      setError(err.message || 'Connection error. Check console for details.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleVerifyOtp = async () => {
-    if (otp === '1234') {
-      setIsLoading(true);
-      try {
-        await onAuth(phone, name, mode === 'register');
-      } catch (err: any) {
-        setError(err.message || 'Verification failed');
-      } finally {
+    setIsLoading(true);
+    setError('');
+    try {
+      const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
+        body: { 
+          action: 'verify', 
+          phone: phone, 
+          code: otp, 
+          name: name
+        }
+      });
+
+      if (funcError) {
+        setError(`Verification Error: ${funcError.message}`);
         setIsLoading(false);
+        return;
       }
-    } else {
-      setError('Invalid code. Try "1234"');
+
+      if (response?.success) {
+        onAuthComplete(response.profile);
+      } else {
+        setError(mapArkeselError(response?.code || '1104'));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Verification failed');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -286,7 +333,7 @@ const AuthPage: React.FC<{
                 <Input 
                   label="Phone Number" 
                   type="tel"
-                  placeholder="e.g. +254 700 000 000" 
+                  placeholder="e.g. 233544919953" 
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   disabled={isLoading}
@@ -294,9 +341,12 @@ const AuthPage: React.FC<{
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-medium text-left leading-relaxed">
+                <div className="flex items-start gap-2 bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-medium text-left leading-relaxed border border-rose-100">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold">Error Occurred</span>
+                    <span>{error}</span>
+                  </div>
                 </div>
               )}
 
@@ -331,19 +381,17 @@ const AuthPage: React.FC<{
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold text-slate-800 text-center">Enter Code</h2>
                 <p className="text-slate-500 text-sm text-center">
-                  We've sent a code to <span className="font-bold text-slate-700">{phone}</span>
+                  We've sent a 6-digit code to <span className="font-bold text-slate-700">{phone}</span>
                 </p>
-                <div className="bg-amber-50 border border-amber-200 p-2 rounded-lg text-amber-800 text-xs font-medium text-center">
-                   MVP SAMPLE: Use code <span className="font-bold">1234</span>
-                </div>
               </div>
 
               <div className="flex justify-center gap-2">
                 <input 
                   type="text" 
-                  maxLength={4}
-                  className="w-full max-w-[180px] text-center text-4xl font-black tracking-[0.5em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  maxLength={6}
+                  className="w-full max-w-[220px] text-center text-3xl font-black tracking-[0.2em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                   value={otp}
+                  placeholder="000000"
                   onChange={(e) => setOtp(e.target.value)}
                   disabled={isLoading}
                   autoFocus
@@ -356,7 +404,7 @@ const AuthPage: React.FC<{
                 size="xl" 
                 className="w-full" 
                 onClick={handleVerifyOtp}
-                disabled={otp.length < 4 || isLoading}
+                disabled={otp.length < 6 || isLoading}
               >
                 {isLoading ? <Loader2 className="animate-spin" size={24} /> : 'Verify & Login'}
               </Button>
@@ -371,6 +419,11 @@ const AuthPage: React.FC<{
             </div>
           )}
         </Card>
+        
+        {/* Diagnostic Helper Link */}
+        <p className="text-[10px] text-purple-200 opacity-50 font-mono">
+          Project ID: hxpkierzfyotsdtldmej
+        </p>
       </div>
     </div>
   );
@@ -764,21 +817,15 @@ export default function App() {
     }
   };
 
-  const handleAuth = async (phoneNumber: string, name: string, isRegister: boolean) => {
-    let profileData;
-    if (isRegister) {
-      const { data, error } = await supabase.from('profiles').insert({ phone: phoneNumber, name: name, has_completed_onboarding: false }).select().single();
-      if (error) throw error;
-      profileData = data;
-    } else {
-      const { data, error } = await supabase.from('profiles').select('*').eq('phone', phoneNumber).single();
-      if (error) throw error;
-      profileData = data;
-    }
+  const onAuthComplete = (profileData: any) => {
     if (profileData) {
       setState(prev => ({
         ...prev,
-        user: { phoneNumber, name: profileData.name || name, hasCompletedOnboarding: profileData.has_completed_onboarding }
+        user: { 
+          phoneNumber: profileData.phone, 
+          name: profileData.name, 
+          hasCompletedOnboarding: profileData.has_completed_onboarding 
+        }
       }));
     }
   };
@@ -818,7 +865,7 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route path="/login" element={!state.user ? <AuthPage onAuth={handleAuth} onMissingTables={() => setShowSetup(true)} /> : (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)} />
+        <Route path="/login" element={!state.user ? <AuthPage onAuthComplete={onAuthComplete} onMissingTables={() => setShowSetup(true)} /> : (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)} />
         <Route path="/onboarding" element={state.user ? (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <OnboardingPage onComplete={handleOnboarding} />) : <Navigate to="/login" replace />} />
         <Route path="/dashboard" element={state.user?.hasCompletedOnboarding ? <Dashboard state={state} onLogout={() => setShowLogoutConfirm(true)} insight={insight} /> : <Navigate to="/login" replace />} />
         <Route path="/record/sale" element={state.user?.hasCompletedOnboarding ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} recentTransactions={state.transactions.filter(t => t.type === 'sale').slice().reverse().slice(0, 5)} /> : <Navigate to="/login" replace />} />
