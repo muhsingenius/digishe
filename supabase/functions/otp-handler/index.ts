@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -8,133 +7,142 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+/**
+ * Normalizes phone numbers to a standard format (e.g., 233503088600).
+ */
+function normalizePhone(phone: string): string {
+  let cleaned = phone.replace(/\D/g, '');
+  
+  // If it starts with 0 and is 10 digits, it's a local Ghana number
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    cleaned = '233' + cleaned.substring(1);
+  } 
+  // If it's 9 digits, it's likely a local number without the leading zero
+  else if (cleaned.length === 9) {
+    cleaned = '233' + cleaned;
   }
+  return cleaned;
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const body = await req.json()
-    const { action, phone, code, name } = body
-    
-    // Use any cast for Deno to avoid environment type errors in the editor
-    const env = (Deno as any).env
-    const ARKESEL_API_KEY = env.get('ARKESEL_API_KEY')
+    const { action, phone, code, name, mode } = await req.json()
+    // Fix: Access Deno through globalThis to avoid "Cannot find name 'Deno'" compiler error
+    const env = (globalThis as any).Deno.env
+    const ARKESEL_KEY = env.get('ARKESEL_API_KEY')
     const SUPABASE_URL = env.get('SUPABASE_URL')
-    const SERVICE_ROLE_KEY = env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const SERVICE_KEY = env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    // --- ACTION: PING (For Debugging) ---
-    if (action === 'ping') {
-      return new Response(JSON.stringify({ 
-        status: 'online', 
-        has_arkesel_key: !!ARKESEL_API_KEY,
-        message: 'Edge Function is reachable' 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      })
+    if (!ARKESEL_KEY) throw new Error('ARKESEL_API_KEY is missing in Supabase Secrets.')
+
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
+
+    // Strictly normalize the phone number before any logic
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone || normalizedPhone.length < 10) {
+      throw new Error('Invalid phone number format provided.');
     }
 
-    if (!ARKESEL_API_KEY) {
-      throw new Error('ARKESEL_API_KEY is not set in Supabase Secrets')
-    }
-
-    const supabase = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!)
-
-    // Clean the phone number: remove any non-digit characters
-    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : ''
-
-    // --- ACTION: SEND OTP ---
     if (action === 'send') {
-      if (!cleanPhone) throw new Error('Phone number is required for send action')
+      // Step 1: Check if user exists
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', normalizedPhone)
+        .maybeSingle();
 
+      // Step 2: Validate against the requested mode
+      if (mode === 'login' && !profile) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Account not found. Please register first.', 
+            code: 'USER_NOT_FOUND' 
+          }), 
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      if (mode === 'register' && profile) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'This number is already registered. Please login.', 
+            code: 'USER_ALREADY_EXISTS' 
+          }), 
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      console.log(`Sending OTP to normalized number: ${normalizedPhone}`);
       const response = await fetch('https://sms.arkesel.com/api/otp/generate', {
         method: 'POST',
-        headers: {
-          'api-key': ARKESEL_API_KEY,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'api-key': ARKESEL_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          expiry: 5,
-          length: 6,
-          medium: 'sms',
-          message: 'Your DigiShe verification code is %otp_code%. It expires in %expiry% minutes.',
-          number: cleanPhone,
+          expiry: 5, 
+          length: 6, 
+          medium: 'sms', 
           sender_id: 'DigiShe',
-          type: 'numeric',
+          message: 'Your DigiShe code is %otp_code%. It expires in %expiry% min.',
+          number: normalizedPhone, 
+          type: 'numeric'
         }),
       })
-
-      const result = await response.json()
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      })
+      const result = await response.json();
+      return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // --- ACTION: VERIFY OTP ---
     if (action === 'verify') {
-      if (!cleanPhone || !code) throw new Error('Phone and code are required for verify action')
-
+      console.log(`Verifying OTP for normalized number: ${normalizedPhone}`);
       const response = await fetch('https://sms.arkesel.com/api/otp/verify', {
         method: 'POST',
-        headers: {
-          'api-key': ARKESEL_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: code,
-          number: cleanPhone,
-        }),
+        headers: { 'api-key': ARKESEL_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, number: normalizedPhone }),
       })
-
       const result = await response.json()
 
-      // 1100 = Arkesel Success Code
       if (result.code === '1100' || result.code === 1100) {
-        // Find or create profile using service role for admin access
-        let { data: profile, error: fetchError } = await supabase
+        // ALWAYS use normalizedPhone for DB lookups and inserts
+        let { data: profile } = await supabase
           .from('profiles')
           .select('*')
-          .eq('phone', phone) // Keep original phone format for DB consistency or use cleanPhone
+          .eq('phone', normalizedPhone)
           .maybeSingle()
 
         if (!profile) {
-          const { data: newProfile, error: insertError } = await supabase
+          console.log(`Creating new profile with normalized number: ${normalizedPhone}`);
+          const { data: newP, error: iErr } = await supabase
             .from('profiles')
             .insert({ 
-              phone: phone, 
-              name: name || 'User', 
-              has_completed_onboarding: false 
+              phone: normalizedPhone, 
+              name: name || 'User',
+              has_completed_onboarding: false
             })
             .select()
             .single()
           
-          if (insertError) throw insertError
-          profile = newProfile
+          if (iErr) throw iErr
+          profile = newP
         }
-
-        return new Response(JSON.stringify({ success: true, profile }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
+        
+        return new Response(JSON.stringify({ success: true, profile }), { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         })
       }
-
-      return new Response(JSON.stringify({ success: false, ...result }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200, // Return 200 but success: false to avoid catch blocks in frontend for "valid" business logic errors
+      
+      return new Response(JSON.stringify({ success: false, ...result }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
-
-    throw new Error(`Invalid action: ${action}`)
+    
+    throw new Error('Invalid action requested.');
   } catch (error) {
-    return new Response(JSON.stringify({ 
-      error: (error as Error).message,
-      details: 'Check Edge Function logs in Supabase Dashboard'
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+    console.error(`Edge Function Error: ${error.message}`);
+    return new Response(JSON.stringify({ error: error.message }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+      status: 400 
     })
   }
 })

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, Business, Transaction, AppState, BusinessType } from './types';
@@ -34,7 +33,11 @@ import {
   Copy,
   Check,
   XCircle,
-  WifiOff
+  WifiOff,
+  Phone,
+  RefreshCw,
+  Timer,
+  MapPin
 } from 'lucide-react';
 import { getBusinessInsight } from './services/geminiService';
 
@@ -48,8 +51,8 @@ const initialState: AppState = {
 };
 
 // --- SQL Setup Script ---
-const SQL_SETUP = `-- Copy this to Supabase SQL Editor
-CREATE TABLE public.profiles (
+const SQL_SETUP = `-- Copy this to Supabase SQL Editor and click RUN
+CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   phone text UNIQUE NOT NULL,
   name text,
@@ -57,16 +60,17 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone DEFAULT now()
 );
 
-CREATE TABLE public.businesses (
+CREATE TABLE IF NOT EXISTS public.businesses (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   name text NOT NULL,
   type text NOT NULL,
+  location text,
   start_date timestamp with time zone NOT NULL,
   created_at timestamp with time zone DEFAULT now()
 );
 
-CREATE TABLE public.transactions (
+CREATE TABLE IF NOT EXISTS public.transactions (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   business_id uuid REFERENCES public.businesses(id) ON DELETE CASCADE,
   type text CHECK (type IN ('sale', 'expense')),
@@ -76,15 +80,32 @@ CREATE TABLE public.transactions (
   created_at timestamp with time zone DEFAULT now()
 );
 
+-- Basic Policies for MVP
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access" ON public.profiles FOR ALL USING (true);
-CREATE POLICY "Public Access" ON public.businesses FOR ALL USING (true);
-CREATE POLICY "Public Access" ON public.transactions FOR ALL USING (true);`;
+CREATE POLICY "Public Access Profiles" ON public.profiles FOR ALL USING (true);
+CREATE POLICY "Public Access Businesses" ON public.businesses FOR ALL USING (true);
+CREATE POLICY "Public Access Transactions" ON public.transactions FOR ALL USING (true);
+
+-- Migration for existing tables:
+-- ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS location text;`;
 
 // --- Helper Functions ---
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+/**
+ * Normalizes phone numbers to a standard format (e.g., 233503088600).
+ */
+const normalizePhone = (phone: string): string => {
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    cleaned = '233' + cleaned.substring(1);
+  } else if (cleaned.length === 9) {
+    cleaned = '233' + cleaned;
+  }
+  return cleaned;
+};
 
 const getWeeklyData = (transactions: Transaction[]) => {
   const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -107,13 +128,12 @@ const getWeeklyData = (transactions: Transaction[]) => {
 const mapArkeselError = (code: string | number) => {
   const codeStr = String(code);
   const errors: Record<string, string> = {
-    '1005': 'Invalid phone number format.',
-    '1007': 'System error: Insufficient SMS balance.',
-    '1104': 'The code you entered is incorrect.',
-    '1105': 'This code has expired. Please request a new one.',
-    '1001': 'Required information is missing.',
+    '1005': 'Invalid phone format. Please enter a valid number.',
+    '1007': 'SMS service is currently unavailable. Contact support.',
+    '1104': 'Incorrect verification code. Please try again.',
+    '1105': 'Code expired. Please request a new one.',
   };
-  return errors[codeStr] || `Authentication error (Code ${codeStr})`;
+  return errors[codeStr] || `Error: ${codeStr}`;
 };
 
 // --- Components ---
@@ -164,10 +184,10 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </button>
         </div>
         <div className="p-6 overflow-y-auto space-y-6">
-          <p className="text-slate-600 text-sm">
-            If you see connection errors, ensure you've run this SQL in your Supabase SQL Editor:
-          </p>
-
+          <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3 text-amber-800 text-sm">
+            <AlertCircle className="shrink-0" size={18} />
+            <p>You <strong>must</strong> run this script in Supabase once to create the tables, or your authentication will fail.</p>
+          </div>
           <div className="relative group">
             <div className="absolute right-4 top-4 z-10">
               <button 
@@ -175,16 +195,15 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-700 transition-all active:scale-95"
               >
                 {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                {copied ? 'Copied!' : 'Copy SQL'}
+                {copied ? 'Copied!' : 'Copy SQL Script'}
               </button>
             </div>
-            <pre className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-[10px] font-mono text-slate-700 overflow-x-auto whitespace-pre leading-relaxed h-[300px]">
+            <pre className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-[10px] font-mono text-slate-700 overflow-x-auto whitespace-pre leading-relaxed h-[250px]">
               {SQL_SETUP}
             </pre>
           </div>
-          
           <Button onClick={onClose} className="w-full">
-            Done
+            I've Run the Script
           </Button>
         </div>
       </Card>
@@ -204,14 +223,28 @@ const AuthPage: React.FC<{
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  // Resend OTP Countdown logic
+  useEffect(() => {
+    let interval: any;
+    if (step === 'otp' && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, resendTimer]);
 
   const handleContinue = async () => {
     if (mode === 'register' && !name) {
       setError('Please enter your full name');
       return;
     }
-    if (!phone) {
-      setError('Please enter your phone number');
+    
+    const normalized = normalizePhone(phone);
+    if (normalized.length < 10) {
+      setError('Please enter a valid phone number.');
       return;
     }
 
@@ -219,55 +252,75 @@ const AuthPage: React.FC<{
     setError('');
 
     try {
-      // Step 1: Check if profile exists for Login mode
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', phone)
-        .maybeSingle();
+      const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
+        body: { action: 'send', phone: normalized, mode: mode }
+      });
 
-      if (fetchError) {
-        if (fetchError.message.includes('relation "profiles" does not exist')) {
+      if (funcError) {
+        let errorMessage = funcError.message;
+        if (errorMessage.toLowerCase().includes('profiles') && errorMessage.toLowerCase().includes('not found')) {
           onMissingTables();
+          setIsLoading(false);
           return;
         }
-        throw fetchError;
-      }
-
-      if (mode === 'login' && !data) {
-        setError('No account found. Please register first.');
+        setError(errorMessage);
         setIsLoading(false);
         return;
       }
 
-      // Step 2: Trigger SMS via Edge Function
-      console.log('Invoking otp-handler function...');
-      const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
-        body: { action: 'send', phone: phone }
-      });
+      if (response?.code === 'USER_NOT_FOUND') {
+        setError("Account not found. Click 'Register' below to create a new account.");
+        setIsLoading(false);
+        return;
+      }
 
-      if (funcError) {
-        console.error('Edge Function Error:', funcError);
-        // Specifically catch the "Failed to send a request" error which is often a CORS or 404 issue
-        if (funcError.message?.includes('Failed to send a request')) {
-          setError('Could not reach the authentication server. Please ensure the "otp-handler" function is deployed in your Supabase dashboard.');
-        } else {
-          setError(`Server Error: ${funcError.message}`);
-        }
+      if (response?.code === 'USER_ALREADY_EXISTS') {
+        setError("Account already exists. Click 'Sign in' below to access your account.");
         setIsLoading(false);
         return;
       }
 
       if (response?.code === '1000' || response?.code === 1000) {
         setStep('otp');
-      } else if (response?.error) {
-        setError(response.error);
+        setResendTimer(60); // Start 60s resend countdown
       } else {
         setError(mapArkeselError(response?.code || 'unknown'));
       }
     } catch (err: any) {
-      console.error('Auth Exception:', err);
-      setError(err.message || 'Connection error. Check console for details.');
+      setError(err.message || 'Connection lost.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendTimer > 0 || isLoading) return;
+    
+    setError('');
+    setIsLoading(true);
+    const normalized = normalizePhone(phone);
+
+    try {
+      const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
+        body: { action: 'send', phone: normalized, mode: mode }
+      });
+
+      if (funcError) {
+        setError(funcError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      if (response?.code === '1000' || response?.code === 1000) {
+        setResendTimer(60); // Reset cooldown
+        setOtp('');
+        setError('New code sent successfully!');
+        setTimeout(() => setError(''), 3000);
+      } else {
+        setError(mapArkeselError(response?.code || 'unknown'));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Resend failed');
     } finally {
       setIsLoading(false);
     }
@@ -276,18 +329,15 @@ const AuthPage: React.FC<{
   const handleVerifyOtp = async () => {
     setIsLoading(true);
     setError('');
+    const normalized = normalizePhone(phone);
+    
     try {
       const { data: response, error: funcError } = await supabase.functions.invoke('otp-handler', {
-        body: { 
-          action: 'verify', 
-          phone: phone, 
-          code: otp, 
-          name: name
-        }
+        body: { action: 'verify', phone: normalized, code: otp, name }
       });
 
       if (funcError) {
-        setError(`Verification Error: ${funcError.message}`);
+        setError(funcError.message);
         setIsLoading(false);
         return;
       }
@@ -314,12 +364,10 @@ const AuthPage: React.FC<{
           <h1 className="text-4xl font-black">DigiShe</h1>
           <p className="text-purple-100 text-lg font-medium">Digital bookkeeping for women entrepreneurs</p>
         </div>
-
         <Card className="p-8 space-y-6 text-slate-900">
           {step === 'input' ? (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-slate-800">{mode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
-              
               <div className="space-y-4">
                 {mode === 'register' && (
                   <Input 
@@ -330,40 +378,35 @@ const AuthPage: React.FC<{
                     disabled={isLoading}
                   />
                 )}
-                <Input 
-                  label="Phone Number" 
-                  type="tel"
-                  placeholder="e.g. 233544919953" 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={isLoading}
-                />
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700 ml-1">Phone Number</label>
+                  <div className="relative">
+                    <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input 
+                      type="tel"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
+                      placeholder="e.g. 0503088600" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
               </div>
-
               {error && (
-                <div className="flex items-start gap-2 bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-medium text-left leading-relaxed border border-rose-100">
+                <div className="flex items-start gap-2 bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-medium text-left border border-rose-100 animate-in fade-in slide-in-from-top-1">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  <div className="flex flex-col gap-1">
-                    <span className="font-bold">Error Occurred</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold">Notice</span>
                     <span>{error}</span>
                   </div>
                 </div>
               )}
-
-              <Button 
-                size="xl" 
-                className="w-full" 
-                onClick={handleContinue}
-                disabled={isLoading}
-              >
+              <Button size="xl" className="w-full" onClick={handleContinue} disabled={isLoading}>
                 {isLoading ? <Loader2 className="animate-spin" size={24} /> : <>Continue <ArrowRight size={20} /></>}
               </Button>
-
               <button 
-                onClick={() => {
-                  setMode(mode === 'login' ? 'register' : 'login');
-                  setError('');
-                }}
+                onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
                 disabled={isLoading}
                 className="text-purple-600 font-bold hover:underline disabled:opacity-50 pt-2"
               >
@@ -377,239 +420,104 @@ const AuthPage: React.FC<{
                   <ShieldCheck size={40} />
                 </div>
               </div>
-              
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-slate-800 text-center">Enter Code</h2>
-                <p className="text-slate-500 text-sm text-center">
-                  We've sent a 6-digit code to <span className="font-bold text-slate-700">{phone}</span>
-                </p>
+                <h2 className="text-2xl font-bold text-slate-800 text-center">Verify Phone</h2>
+                <p className="text-slate-500 text-sm text-center">Code sent to <span className="font-bold text-slate-700">{normalizePhone(phone)}</span></p>
               </div>
-
               <div className="flex justify-center gap-2">
                 <input 
-                  type="text" 
-                  maxLength={6}
+                  type="text" maxLength={6}
                   className="w-full max-w-[220px] text-center text-3xl font-black tracking-[0.2em] py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                  value={otp}
-                  placeholder="000000"
+                  value={otp} placeholder="000000"
                   onChange={(e) => setOtp(e.target.value)}
-                  disabled={isLoading}
-                  autoFocus
+                  disabled={isLoading} autoFocus
                 />
               </div>
+              
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-full flex justify-center">
+                  <button 
+                    onClick={handleResend}
+                    disabled={resendTimer > 0 || isLoading}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all ${resendTimer === 0 && !isLoading ? 'bg-purple-50 text-purple-600 hover:bg-purple-100 active:scale-95' : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'}`}
+                  >
+                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    {resendTimer > 0 ? `Resend Code in ${resendTimer}s` : 'Resend OTP Message'}
+                  </button>
+                </div>
+              </div>
 
-              {error && <p className="text-rose-500 text-sm font-medium text-center">{error}</p>}
-
-              <Button 
-                size="xl" 
-                className="w-full" 
-                onClick={handleVerifyOtp}
-                disabled={otp.length < 6 || isLoading}
-              >
-                {isLoading ? <Loader2 className="animate-spin" size={24} /> : 'Verify & Login'}
+              {error && (
+                <p className={`text-sm font-medium text-center ${error.includes('successfully') ? 'text-emerald-600' : 'text-rose-500'}`}>
+                  {error}
+                </p>
+              )}
+              
+              <Button size="xl" className="w-full" onClick={handleVerifyOtp} disabled={otp.length < 6 || isLoading}>
+                {isLoading ? <Loader2 className="animate-spin" size={24} /> : 'Verify & Sign In'}
               </Button>
-
-              <button 
-                onClick={() => setStep('input')}
-                disabled={isLoading}
-                className="text-slate-400 font-medium hover:text-slate-600 flex items-center justify-center gap-1 w-full"
-              >
+              
+              <button onClick={() => setStep('input')} disabled={isLoading} className="text-slate-400 font-medium hover:text-slate-600 flex items-center justify-center gap-1 w-full pt-2">
                 <ChevronLeft size={16} /> Edit Phone Number
               </button>
             </div>
           )}
         </Card>
-        
-        {/* Diagnostic Helper Link */}
-        <p className="text-[10px] text-purple-200 opacity-50 font-mono">
-          Project ID: hxpkierzfyotsdtldmej
-        </p>
       </div>
     </div>
   );
 };
 
-// --- Record Transaction Page ---
-const RecordPage: React.FC<{ 
-  type: 'sale' | 'expense'; 
-  onSave: (amount: number, category: string) => void;
-  recentTransactions: Transaction[];
-}> = ({ type, onSave, recentTransactions }) => {
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
-  const navigate = useNavigate();
+// --- Onboarding ---
+const OnboardingPage: React.FC<{ onComplete: (business: Business) => Promise<void> }> = ({ onComplete }) => {
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
+  const [type, setType] = useState<BusinessType>('Food');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const businessTypes: BusinessType[] = ['Food', 'Fashion', 'Trading', 'Production', 'Services'];
 
-  const saleCategories = ["Direct Product Sale", "Service Fee", "Wholesale", "Retail", "Subscription", "Consulting", "Other"];
-  const expenseCategories = ["Rent", "Salary", "Inventory/Stock", "Utilities", "Marketing", "Travel", "Taxes", "Maintenance", "Office Supplies", "Other"];
-  const categories = type === 'sale' ? saleCategories : expenseCategories;
-
-  const handleSave = () => {
-    const val = parseFloat(amount);
-    if (!isNaN(val) && val > 0 && category) {
-      onSave(val, category);
-      setShowSuccess(true);
-      setTimeout(() => navigate('/dashboard'), 1000);
+  const handleSubmit = async () => {
+    setIsSaving(true);
+    setError('');
+    try {
+      await onComplete({ name, type, location, startDate: new Date().toISOString() });
+    } catch (err: any) {
+      setError(err.message || 'Failed to save business info');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  if (showSuccess) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300">
-        <div className={`p-8 rounded-full mb-6 ${type === 'sale' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-          <CheckCircle2 size={64} />
-        </div>
-        <h2 className="text-4xl font-black mb-2">{type === 'sale' ? 'Sale' : 'Expense'} Recorded!</h2>
-        <p className="text-slate-500 text-lg">Heading back to your dashboard...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white p-6 border-b border-slate-100 sticky top-0 z-20 flex items-center gap-4">
-        <button onClick={() => navigate('/dashboard')} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <h2 className="text-xl font-bold text-slate-900">Record {type === 'sale' ? 'Sale' : 'Expense'}</h2>
-      </header>
-
-      <main className="flex-1 p-6 space-y-8 max-w-2xl mx-auto w-full">
-        <section className="space-y-3">
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Recent {type === 'sale' ? 'Sales' : 'Expenses'}</h3>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 border-b border-slate-100 text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-bold">Category</th>
-                  <th className="px-4 py-3 font-bold text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recentTransactions.length > 0 ? (
-                  recentTransactions.map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-medium text-slate-700">{t.category}</td>
-                      <td className={`px-4 py-3 text-right font-bold ${type === 'sale' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        ${t.amount.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={2} className="px-4 py-8 text-center text-slate-400 italic">
-                      No recent {type}s found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
+    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center space-y-2">
+          <h2 className="text-3xl font-black text-slate-900">Tell us about your business</h2>
+          <p className="text-slate-500">Let's set up your digital ledger</p>
+        </div>
         <Card className="space-y-6">
-          <SearchableDropdown 
-            label="Category"
-            placeholder={`Select ${type} category`}
-            options={categories}
-            value={category}
-            onChange={setCategory}
-          />
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700 ml-1">Amount</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-              <input 
-                type="number" 
-                inputMode="decimal"
-                className="w-full pl-8 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-2xl font-black text-slate-900"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+          <Input label="Business Name" placeholder="e.g. Mama's Kitchen" value={name} onChange={(e) => setName(e.target.value)} disabled={isSaving} />
+          <Input label="Business Location" placeholder="e.g. Makola Market, Accra" value={location} onChange={(e) => setLocation(e.target.value)} disabled={isSaving} />
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700 ml-1">Business Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              {businessTypes.map(t => (
+                <button 
+                  key={t} type="button" disabled={isSaving} onClick={() => setType(t)} 
+                  className={`px-4 py-3 rounded-xl border text-sm font-bold transition-all ${type === t ? 'bg-purple-600 border-purple-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300'}`}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
           </div>
-          <Button 
-            size="xl" 
-            variant={type === 'sale' ? 'sale' : 'expense'} 
-            className="w-full shadow-xl"
-            onClick={handleSave}
-            disabled={!amount || parseFloat(amount) <= 0 || !category}
-          >
-            {type === 'sale' ? <PlusCircle size={24} /> : <MinusCircle size={24} />}
-            Save {type === 'sale' ? 'Sale' : 'Expense'}
+          {error && <p className="text-rose-500 text-sm font-medium text-center">{error}</p>}
+          <Button size="xl" className="w-full" onClick={handleSubmit} disabled={!name || isSaving}>
+            {isSaving ? <Loader2 className="animate-spin" /> : <>Create My Business <ArrowRight size={20} /></>}
           </Button>
         </Card>
-      </main>
-    </div>
-  );
-};
-
-// --- Searchable Dropdown ---
-const SearchableDropdown: React.FC<{ 
-  options: string[]; 
-  value: string; 
-  onChange: (val: string) => void; 
-  placeholder: string;
-  label: string;
-}> = ({ options, value, onChange, placeholder, label }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const filteredOptions = options.filter(opt => 
-    opt.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  return (
-    <div className="relative w-full">
-      <label className="text-sm font-semibold text-slate-700 ml-1 mb-1.5 block">{label}</label>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-      >
-        <span className={value ? 'text-slate-900 font-medium' : 'text-slate-400'}>
-          {value || placeholder}
-        </span>
-        <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-50 mt-2 w-full bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="p-2 border-b border-slate-50 flex items-center gap-2 bg-slate-50/50">
-            <Search size={16} className="text-slate-400" />
-            <input
-              className="bg-transparent border-none focus:outline-none text-sm w-full py-1"
-              placeholder="Search categories..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div className="max-h-60 overflow-y-auto">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  className={`w-full text-left px-4 py-3 text-sm hover:bg-purple-50 transition-colors ${value === opt ? 'bg-purple-100 text-purple-700 font-bold' : 'text-slate-700'}`}
-                  onClick={() => {
-                    onChange(opt);
-                    setIsOpen(false);
-                    setSearchTerm('');
-                  }}
-                >
-                  {opt}
-                </button>
-              ))
-            ) : (
-              <div className="px-4 py-3 text-sm text-slate-400 italic">No categories found</div>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -621,7 +529,6 @@ const Dashboard: React.FC<{
   insight: string;
 }> = ({ state, onLogout, insight }) => {
   const navigate = useNavigate();
-  
   const stats = useMemo(() => {
     const sales = state.transactions.filter(t => t.type === 'sale').reduce((acc, t) => acc + t.amount, 0);
     const expenses = state.transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
@@ -640,7 +547,14 @@ const Dashboard: React.FC<{
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 leading-tight">{state.business?.name}</h1>
-              <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">{state.business?.type}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">{state.business?.type}</p>
+                {state.business?.location && (
+                  <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                    <MapPin size={10} /> {state.business.location}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={onLogout} className="p-2 text-slate-400 hover:text-rose-500 transition-all active:scale-90">
@@ -649,7 +563,7 @@ const Dashboard: React.FC<{
         </div>
       </header>
       <main className="p-6 max-w-4xl mx-auto space-y-6">
-        <Card className="bg-gradient-to-br from-purple-600 to-indigo-700 border-none text-white overflow-hidden relative">
+        <Card className="bg-gradient-to-br from-purple-600 to-indigo-700 border-none text-white overflow-hidden relative shadow-lg">
           <Sparkles className="absolute -right-4 -top-4 text-white/10 w-32 h-32" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
@@ -712,49 +626,54 @@ const Dashboard: React.FC<{
   );
 };
 
-// --- Onboarding ---
-const OnboardingPage: React.FC<{ onComplete: (business: Business) => Promise<void> }> = ({ onComplete }) => {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<BusinessType>('Food');
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
-  const businessTypes: BusinessType[] = ['Food', 'Fashion', 'Trading', 'Production', 'Services'];
+// --- Record Transaction Page ---
+const RecordPage: React.FC<{ 
+  type: 'sale' | 'expense'; 
+  onSave: (amount: number, category: string) => void;
+  recentTransactions: Transaction[];
+}> = ({ type, onSave, recentTransactions }) => {
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = async () => {
-    setIsSaving(true);
-    setError('');
-    try {
-      await onComplete({ name, type, startDate: new Date().toISOString() });
-    } catch (err: any) {
-      setError(err.message || 'Failed to save business info');
-    } finally {
-      setIsSaving(false);
+  const handleSave = () => {
+    const val = parseFloat(amount);
+    if (!isNaN(val) && val > 0 && category) {
+      onSave(val, category);
+      setShowSuccess(true);
+      setTimeout(() => navigate('/dashboard'), 1000);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <h2 className="text-3xl font-black text-slate-900">Tell us about your business</h2>
-          <p className="text-slate-500">Let's set up your digital ledger</p>
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300">
+        <div className={`p-8 rounded-full mb-6 ${type === 'sale' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+          <CheckCircle2 size={64} />
         </div>
+        <h2 className="text-4xl font-black mb-2">{type === 'sale' ? 'Sale' : 'Expense'} Recorded!</h2>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-white p-6 border-b border-slate-100 flex items-center gap-4">
+        <button onClick={() => navigate('/dashboard')} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors">
+          <ChevronLeft size={24} />
+        </button>
+        <h2 className="text-xl font-bold text-slate-900">Record {type === 'sale' ? 'Sale' : 'Expense'}</h2>
+      </header>
+      <main className="p-6 space-y-6 max-w-2xl mx-auto w-full">
         <Card className="space-y-6">
-          <Input label="Business Name" placeholder="e.g. Mama's Kitchen" value={name} onChange={(e) => setName(e.target.value)} disabled={isSaving} />
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700 ml-1">Business Category</label>
-            <div className="grid grid-cols-2 gap-2">
-              {businessTypes.map(t => (
-                <button key={t} type="button" disabled={isSaving} onClick={() => setType(t)} className={`px-4 py-3 rounded-xl border text-sm font-bold transition-all ${type === t ? 'bg-purple-600 border-purple-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300'}`}>{t}</button>
-              ))}
-            </div>
-          </div>
-          {error && <p className="text-rose-500 text-sm font-medium text-center">{error}</p>}
-          <Button size="xl" className="w-full" onClick={handleSubmit} disabled={!name || isSaving}>
-            {isSaving ? <Loader2 className="animate-spin" /> : <>Create My Business <ArrowRight size={20} /></>}
+          <Input label="Category" placeholder="e.g. Rent, Wholesale" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <Input label="Amount" type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Button size="xl" variant={type === 'sale' ? 'sale' : 'expense'} className="w-full" onClick={handleSave}>
+            Save {type === 'sale' ? 'Sale' : 'Expense'}
           </Button>
         </Card>
-      </div>
+      </main>
     </div>
   );
 };
@@ -765,9 +684,7 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : initialState;
-    } catch (e) {
-      return initialState;
-    }
+    } catch (e) { return initialState; }
   });
   const [insight, setInsight] = useState("Keep up the great work!");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -789,13 +706,10 @@ export default function App() {
   }, [state.user?.phoneNumber]);
 
   const fetchDataFromSupabase = async (phone: string) => {
+    const normalized = normalizePhone(phone);
     setIsSyncing(true);
     try {
-      const { data: profile, error: pErr } = await supabase.from('profiles').select('*').eq('phone', phone).maybeSingle();
-      if (pErr) {
-        if (pErr.message.includes('relation "profiles" does not exist') || pErr.message.includes('Could not find the table')) setShowSetup(true);
-        throw pErr;
-      }
+      const { data: profile } = await supabase.from('profiles').select('*').eq('phone', normalized).maybeSingle();
       if (profile) {
         const { data: business } = await supabase.from('businesses').select('*').eq('user_id', profile.id).maybeSingle();
         let transactions: any[] = [];
@@ -805,36 +719,27 @@ export default function App() {
         }
         setState(prev => ({
           ...prev,
-          user: { phoneNumber: phone, name: profile.name, hasCompletedOnboarding: profile.has_completed_onboarding },
-          business: business ? { name: business.name, type: business.type, startDate: business.start_date } : null,
-          transactions: transactions.map(t => ({ id: t.id, userId: phone, type: t.type, amount: t.amount, category: t.category, date: t.date }))
+          user: { phoneNumber: normalized, name: profile.name, hasCompletedOnboarding: profile.has_completed_onboarding },
+          business: business ? { name: business.name, type: business.type as BusinessType, location: business.location, startDate: business.start_date } : null,
+          transactions: transactions.map(t => ({ id: t.id, userId: normalized, type: t.type, amount: t.amount, category: t.category, date: t.date }))
         }));
       }
-    } catch (err) { 
-      console.error("Sync error:", err); 
-    } finally { 
-      setIsSyncing(false); 
-    }
-  };
-
-  const onAuthComplete = (profileData: any) => {
-    if (profileData) {
-      setState(prev => ({
-        ...prev,
-        user: { 
-          phoneNumber: profileData.phone, 
-          name: profileData.name, 
-          hasCompletedOnboarding: profileData.has_completed_onboarding 
-        }
-      }));
-    }
+    } catch (err) { console.error("Sync error:", err); } 
+    finally { setIsSyncing(false); }
   };
 
   const handleOnboarding = async (business: Business) => {
     if (!state.user) return;
-    const { data: profile } = await supabase.from('profiles').select('id').eq('phone', state.user.phoneNumber).single();
+    const normalized = normalizePhone(state.user.phoneNumber);
+    const { data: profile } = await supabase.from('profiles').select('id').eq('phone', normalized).single();
     if (profile) {
-      const { error: bizError } = await supabase.from('businesses').insert({ user_id: profile.id, name: business.name, type: business.type, start_date: business.startDate });
+      const { error: bizError } = await supabase.from('businesses').insert({ 
+        user_id: profile.id, 
+        name: business.name, 
+        type: business.type, 
+        location: business.location,
+        start_date: business.startDate 
+      });
       if (bizError) throw bizError;
       const { error: profileError } = await supabase.from('profiles').update({ has_completed_onboarding: true }).eq('id', profile.id);
       if (profileError) throw profileError;
@@ -844,11 +749,12 @@ export default function App() {
 
   const addTransaction = async (type: 'sale' | 'expense', amount: number, category: string) => {
     if (!state.user || !state.business) return;
+    const normalized = normalizePhone(state.user.phoneNumber);
     const tempId = Math.random().toString(36).substr(2, 9);
     const dateStr = formatDate(new Date());
-    const newTx: Transaction = { id: tempId, userId: state.user.phoneNumber, type, amount, category, date: dateStr };
+    const newTx: Transaction = { id: tempId, userId: normalized, type, amount, category, date: dateStr };
     setState(prev => ({ ...prev, transactions: [...prev.transactions, newTx] }));
-    const { data: profile } = await supabase.from('profiles').select('id').eq('phone', state.user.phoneNumber).single();
+    const { data: profile } = await supabase.from('profiles').select('id').eq('phone', normalized).single();
     if (profile) {
       const { data: biz } = await supabase.from('businesses').select('id').eq('user_id', profile.id).single();
       if (biz) await supabase.from('transactions').insert({ business_id: biz.id, type, amount, category, date: dateStr });
@@ -865,20 +771,14 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route path="/login" element={!state.user ? <AuthPage onAuthComplete={onAuthComplete} onMissingTables={() => setShowSetup(true)} /> : (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)} />
+        <Route path="/login" element={!state.user ? <AuthPage onAuthComplete={(p) => setState(prev => ({...prev, user: { phoneNumber: p.phone, name: p.name, hasCompletedOnboarding: p.has_completed_onboarding }}))} onMissingTables={() => setShowSetup(true)} /> : (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)} />
         <Route path="/onboarding" element={state.user ? (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <OnboardingPage onComplete={handleOnboarding} />) : <Navigate to="/login" replace />} />
         <Route path="/dashboard" element={state.user?.hasCompletedOnboarding ? <Dashboard state={state} onLogout={() => setShowLogoutConfirm(true)} insight={insight} /> : <Navigate to="/login" replace />} />
-        <Route path="/record/sale" element={state.user?.hasCompletedOnboarding ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} recentTransactions={state.transactions.filter(t => t.type === 'sale').slice().reverse().slice(0, 5)} /> : <Navigate to="/login" replace />} />
-        <Route path="/record/expense" element={state.user?.hasCompletedOnboarding ? <RecordPage type="expense" onSave={(amt, cat) => addTransaction('expense', amt, cat)} recentTransactions={state.transactions.filter(t => t.type === 'expense').slice().reverse().slice(0, 5)} /> : <Navigate to="/login" replace />} />
+        <Route path="/record/:type" element={state.user?.hasCompletedOnboarding ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} recentTransactions={[]} /> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={state.user ? (state.user.hasCompletedOnboarding ? "/dashboard" : "/onboarding") : "/login"} replace />} />
       </Routes>
       {showSetup && <DatabaseSetupModal onClose={() => setShowSetup(false)} />}
       {showLogoutConfirm && <LogoutConfirmModal onConfirm={performLogout} onCancel={() => setShowLogoutConfirm(false)} />}
-      {isSyncing && (
-        <div className="fixed top-4 right-4 bg-white/80 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-slate-400 shadow-sm border border-slate-100 flex items-center gap-2 animate-pulse">
-          <Loader2 size={10} className="animate-spin" /> SYNCING BACKEND
-        </div>
-      )}
     </HashRouter>
   );
 }
