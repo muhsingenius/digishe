@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { User, Business, Transaction, AppState, BusinessType } from './types';
 import { Button, Card, Input, StatBox } from './components/UI';
 import { supabase } from './services/supabase';
@@ -858,6 +858,24 @@ const RecordPage: React.FC<{
   );
 };
 
+// --- Record Route Handler ---
+const RecordRouteHandler: React.FC<{
+  user: User | null;
+  business: Business | null;
+  onSave: (type: 'sale' | 'expense', amount: number, category: string) => void;
+}> = ({ user, business, onSave }) => {
+  const { type } = useParams<{ type: string }>();
+  
+  if (!user || !user.hasCompletedOnboarding || !business?.isActive) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Fallback to sale if something goes wrong, but correctly identify expense
+  const finalType = type === 'expense' ? 'expense' : 'sale';
+
+  return <RecordPage type={finalType} onSave={(amt, cat) => onSave(finalType, amt, cat)} />;
+};
+
 // --- Main App ---
 export default function App() {
   const [state, setState] = useState<AppState>(() => {
@@ -966,7 +984,7 @@ export default function App() {
         <Route path="/pending" element={user?.hasCompletedOnboarding ? (business?.isActive ? <Navigate to="/dashboard" replace /> : <PendingActivationPage onLogout={() => setShowLogoutConfirm(true)} />) : <Navigate to="/login" replace />} />
         <Route path="/admin" element={user?.isAdmin ? <AdminDashboard user={user} onLogout={() => setShowLogoutConfirm(true)} /> : <Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={user?.hasCompletedOnboarding ? (business?.isActive ? <Dashboard state={state} onLogout={() => setShowLogoutConfirm(true)} insight={insight} /> : <Navigate to="/pending" replace />) : <Navigate to="/login" replace />} />
-        <Route path="/record/:type" element={user?.hasCompletedOnboarding && business?.isActive ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} /> : <Navigate to="/login" replace />} />
+        <Route path="/record/:type" element={<RecordRouteHandler user={user} business={business} onSave={addTransaction} />} />
         <Route path="*" element={<Navigate to={user ? (user.hasCompletedOnboarding ? (business?.isActive ? "/dashboard" : "/pending") : "/onboarding") : "/login"} replace />} />
       </Routes>
       {showSetup && <DatabaseSetupModal onClose={() => setShowSetup(false)} />}
