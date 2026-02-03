@@ -5,13 +5,16 @@ export interface User {
   phoneNumber: string;
   name: string;
   hasCompletedOnboarding: boolean;
+  isAdmin: boolean;
 }
 
 export interface Business {
+  id?: string;
   name: string;
   type: BusinessType;
   location?: string;
   startDate: string;
+  isActive: boolean;
 }
 
 export interface Transaction {

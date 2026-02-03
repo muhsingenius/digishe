@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, Business, Transaction, AppState, BusinessType } from './types';
@@ -37,7 +38,10 @@ import {
   Phone,
   RefreshCw,
   Timer,
-  MapPin
+  MapPin,
+  Lock,
+  Unlock,
+  Users
 } from 'lucide-react';
 import { getBusinessInsight } from './services/geminiService';
 
@@ -56,6 +60,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   phone text UNIQUE NOT NULL,
   name text,
+  is_admin boolean DEFAULT false,
   has_completed_onboarding boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now()
 );
@@ -66,6 +71,7 @@ CREATE TABLE IF NOT EXISTS public.businesses (
   name text NOT NULL,
   type text NOT NULL,
   location text,
+  is_active boolean DEFAULT false,
   start_date timestamp with time zone NOT NULL,
   created_at timestamp with time zone DEFAULT now()
 );
@@ -89,14 +95,12 @@ CREATE POLICY "Public Access Businesses" ON public.businesses FOR ALL USING (tru
 CREATE POLICY "Public Access Transactions" ON public.transactions FOR ALL USING (true);
 
 -- Migration for existing tables:
--- ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS location text;`;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin boolean DEFAULT false;
+-- ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT false;`;
 
 // --- Helper Functions ---
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-/**
- * Normalizes phone numbers to a standard format (e.g., 233503088600).
- */
 const normalizePhone = (phone: string): string => {
   let cleaned = phone.replace(/\D/g, '');
   if (cleaned.startsWith('0') && cleaned.length === 10) {
@@ -211,6 +215,178 @@ const DatabaseSetupModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
+// --- Pending Activation Page ---
+const PendingActivationPage: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+      <Card className="max-w-md w-full p-10 space-y-8 shadow-xl border-none">
+        <div className="flex justify-center">
+          <div className="bg-amber-50 p-6 rounded-full text-amber-500 animate-pulse">
+            <Timer size={64} />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <h2 className="text-3xl font-black text-slate-900 leading-tight">Reviewing Your Account</h2>
+          <p className="text-slate-500 font-medium leading-relaxed">
+            Welcome to DigiShe! Our team is reviewing your business details. You will be activated shortly.
+          </p>
+        </div>
+        <div className="bg-slate-50 p-4 rounded-2xl flex items-start gap-3 text-left">
+          <AlertCircle className="text-purple-600 shrink-0 mt-0.5" size={18} />
+          <p className="text-xs text-slate-600">This helps us keep DigiShe safe for all entrepreneurs. You'll gain full access once your account is verified.</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
+            <RefreshCw size={18} /> Check Status
+          </Button>
+          <button onClick={onLogout} className="text-slate-400 font-bold hover:text-rose-500 transition-colors py-2">
+            Sign Out
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// --- Admin Dashboard Page ---
+const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const fetchAllBusinesses = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select(`
+          *,
+          profiles:user_id (phone, name)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setBusinesses(data || []);
+    } catch (err) {
+      console.error("Admin fetch error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user.isAdmin) {
+      navigate('/dashboard');
+      return;
+    }
+    fetchAllBusinesses();
+  }, [user]);
+
+  const toggleActivation = async (businessId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('businesses')
+        .update({ is_active: !currentStatus })
+        .eq('id', businessId);
+      
+      if (error) throw error;
+      setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, is_active: !currentStatus } : b));
+    } catch (err) {
+      alert("Failed to update status");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-purple-700 text-white p-6 shadow-lg">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="bg-white/20 p-2 rounded-xl">
+              <Users size={24} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black">DigiShe Admin</h1>
+              <p className="text-purple-200 text-xs font-bold uppercase tracking-widest">Platform Management</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button variant="outline" className="!text-white !border-white/30 hover:!bg-white/10" onClick={() => navigate('/dashboard')}>
+              Main App
+            </Button>
+            <button onClick={onLogout} className="p-2 hover:text-rose-300 transition-colors">
+              <LogOut size={24} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto w-full p-6 flex-1">
+        <Card className="overflow-hidden p-0 border-none shadow-xl">
+          <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center">
+            <h2 className="text-xl font-bold text-slate-800">Managed Businesses</h2>
+            <Button size="sm" onClick={fetchAllBusinesses} disabled={isLoading}>
+              {isLoading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+              Refresh List
+            </Button>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-xs font-black uppercase tracking-widest border-b border-slate-100">
+                  <th className="px-6 py-4">Business & Owner</th>
+                  <th className="px-6 py-4">Type / Location</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {businesses.length === 0 && !isLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-20 text-center text-slate-400 italic">No businesses found.</td>
+                  </tr>
+                ) : (
+                  businesses.map(b => (
+                    <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-900">{b.name}</p>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                          <UserIcon size={12} /> {b.profiles?.name} • {b.profiles?.phone}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-tighter mr-2">{b.type}</span>
+                        <span className="text-xs text-slate-400 font-medium">{b.location || 'No location'}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${b.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${b.is_active ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          {b.is_active ? 'Active' : 'Pending'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Button 
+                          size="sm" 
+                          variant={b.is_active ? 'outline' : 'primary'} 
+                          className={b.is_active ? '!text-rose-500 !border-rose-100 hover:!bg-rose-50' : ''}
+                          onClick={() => toggleActivation(b.id, b.is_active)}
+                        >
+                          {b.is_active ? <Lock size={14} /> : <Unlock size={14} />}
+                          {b.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </main>
+    </div>
+  );
+};
+
 // --- Auth Page ---
 const AuthPage: React.FC<{ 
   onAuthComplete: (userData: any) => void;
@@ -225,7 +401,6 @@ const AuthPage: React.FC<{
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
-  // Resend OTP Countdown logic
   useEffect(() => {
     let interval: any;
     if (step === 'otp' && resendTimer > 0) {
@@ -282,7 +457,7 @@ const AuthPage: React.FC<{
 
       if (response?.code === '1000' || response?.code === 1000) {
         setStep('otp');
-        setResendTimer(60); // Start 60s resend countdown
+        setResendTimer(60); 
       } else {
         setError(mapArkeselError(response?.code || 'unknown'));
       }
@@ -295,7 +470,6 @@ const AuthPage: React.FC<{
 
   const handleResend = async () => {
     if (resendTimer > 0 || isLoading) return;
-    
     setError('');
     setIsLoading(true);
     const normalized = normalizePhone(phone);
@@ -312,7 +486,7 @@ const AuthPage: React.FC<{
       }
 
       if (response?.code === '1000' || response?.code === 1000) {
-        setResendTimer(60); // Reset cooldown
+        setResendTimer(60); 
         setOtp('');
         setError('New code sent successfully!');
         setTimeout(() => setError(''), 3000);
@@ -481,7 +655,7 @@ const OnboardingPage: React.FC<{ onComplete: (business: Business) => Promise<voi
     setIsSaving(true);
     setError('');
     try {
-      await onComplete({ name, type, location, startDate: new Date().toISOString() });
+      await onComplete({ name, type, location, startDate: new Date().toISOString(), isActive: false });
     } catch (err: any) {
       setError(err.message || 'Failed to save business info');
     } finally {
@@ -546,7 +720,14 @@ const Dashboard: React.FC<{
               <Store className="text-white" size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 leading-tight">{state.business?.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-900 leading-tight">{state.business?.name}</h1>
+                {state.user?.isAdmin && (
+                  <button onClick={() => navigate('/admin')} className="p-1 text-purple-600 hover:bg-purple-50 rounded-md transition-colors">
+                    <ShieldCheck size={18} />
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-3">
                 <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">{state.business?.type}</p>
                 {state.business?.location && (
@@ -630,8 +811,7 @@ const Dashboard: React.FC<{
 const RecordPage: React.FC<{ 
   type: 'sale' | 'expense'; 
   onSave: (amount: number, category: string) => void;
-  recentTransactions: Transaction[];
-}> = ({ type, onSave, recentTransactions }) => {
+}> = ({ type, onSave }) => {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -696,7 +876,7 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    if (state.business && state.transactions.length > 0) {
+    if (state.business?.isActive && state.transactions.length > 0) {
       getBusinessInsight(state.business, state.transactions).then(setInsight);
     }
   }, [state.business, state.transactions]);
@@ -719,8 +899,8 @@ export default function App() {
         }
         setState(prev => ({
           ...prev,
-          user: { phoneNumber: normalized, name: profile.name, hasCompletedOnboarding: profile.has_completed_onboarding },
-          business: business ? { name: business.name, type: business.type as BusinessType, location: business.location, startDate: business.start_date } : null,
+          user: { phoneNumber: normalized, name: profile.name, isAdmin: profile.is_admin, hasCompletedOnboarding: profile.has_completed_onboarding },
+          business: business ? { id: business.id, name: business.name, type: business.type as BusinessType, location: business.location, isActive: business.is_active, startDate: business.start_date } : null,
           transactions: transactions.map(t => ({ id: t.id, userId: normalized, type: t.type, amount: t.amount, category: t.category, date: t.date }))
         }));
       }
@@ -733,17 +913,24 @@ export default function App() {
     const normalized = normalizePhone(state.user.phoneNumber);
     const { data: profile } = await supabase.from('profiles').select('id').eq('phone', normalized).single();
     if (profile) {
-      const { error: bizError } = await supabase.from('businesses').insert({ 
+      const { data: newBiz, error: bizError } = await supabase.from('businesses').insert({ 
         user_id: profile.id, 
         name: business.name, 
         type: business.type, 
         location: business.location,
+        is_active: false,
         start_date: business.startDate 
-      });
+      }).select().single();
+      
       if (bizError) throw bizError;
       const { error: profileError } = await supabase.from('profiles').update({ has_completed_onboarding: true }).eq('id', profile.id);
       if (profileError) throw profileError;
-      setState(prev => ({ ...prev, business, user: prev.user ? { ...prev.user, hasCompletedOnboarding: true } : null }));
+      
+      setState(prev => ({ 
+        ...prev, 
+        business: { ...business, id: newBiz.id, isActive: false }, 
+        user: prev.user ? { ...prev.user, hasCompletedOnboarding: true } : null 
+      }));
     }
   };
 
@@ -768,14 +955,19 @@ export default function App() {
     setShowLogoutConfirm(false);
   };
 
+  const user = state.user;
+  const business = state.business;
+
   return (
     <HashRouter>
       <Routes>
-        <Route path="/login" element={!state.user ? <AuthPage onAuthComplete={(p) => setState(prev => ({...prev, user: { phoneNumber: p.phone, name: p.name, hasCompletedOnboarding: p.has_completed_onboarding }}))} onMissingTables={() => setShowSetup(true)} /> : (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)} />
-        <Route path="/onboarding" element={state.user ? (state.user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <OnboardingPage onComplete={handleOnboarding} />) : <Navigate to="/login" replace />} />
-        <Route path="/dashboard" element={state.user?.hasCompletedOnboarding ? <Dashboard state={state} onLogout={() => setShowLogoutConfirm(true)} insight={insight} /> : <Navigate to="/login" replace />} />
-        <Route path="/record/:type" element={state.user?.hasCompletedOnboarding ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} recentTransactions={[]} /> : <Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to={state.user ? (state.user.hasCompletedOnboarding ? "/dashboard" : "/onboarding") : "/login"} replace />} />
+        <Route path="/login" element={!user ? <AuthPage onAuthComplete={(p) => setState(prev => ({...prev, user: { phoneNumber: p.phone, name: p.name, isAdmin: p.is_admin, hasCompletedOnboarding: p.has_completed_onboarding }}))} onMissingTables={() => setShowSetup(true)} /> : (user.hasCompletedOnboarding ? (business?.isActive ? <Navigate to="/dashboard" replace /> : <Navigate to="/pending" replace />) : <Navigate to="/onboarding" replace />)} />
+        <Route path="/onboarding" element={user ? (user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <OnboardingPage onComplete={handleOnboarding} />) : <Navigate to="/login" replace />} />
+        <Route path="/pending" element={user?.hasCompletedOnboarding ? (business?.isActive ? <Navigate to="/dashboard" replace /> : <PendingActivationPage onLogout={() => setShowLogoutConfirm(true)} />) : <Navigate to="/login" replace />} />
+        <Route path="/admin" element={user?.isAdmin ? <AdminDashboard user={user} onLogout={() => setShowLogoutConfirm(true)} /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={user?.hasCompletedOnboarding ? (business?.isActive ? <Dashboard state={state} onLogout={() => setShowLogoutConfirm(true)} insight={insight} /> : <Navigate to="/pending" replace />) : <Navigate to="/login" replace />} />
+        <Route path="/record/:type" element={user?.hasCompletedOnboarding && business?.isActive ? <RecordPage type="sale" onSave={(amt, cat) => addTransaction('sale', amt, cat)} /> : <Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to={user ? (user.hasCompletedOnboarding ? (business?.isActive ? "/dashboard" : "/pending") : "/onboarding") : "/login"} replace />} />
       </Routes>
       {showSetup && <DatabaseSetupModal onClose={() => setShowSetup(false)} />}
       {showLogoutConfirm && <LogoutConfirmModal onConfirm={performLogout} onCancel={() => setShowLogoutConfirm(false)} />}
