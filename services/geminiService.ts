@@ -3,7 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 import { Transaction, Business } from "../types";
 
 // Always use the specified initialization pattern and assume API_KEY is available in process.env
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.VITE_GEMINI_API_KEY });
+
+console.log("Gemini key:", import.meta.env.VITE_GEMINI_API_KEY);
 
 export async function getBusinessInsight(business: Business, transactions: Transaction[]): Promise<string> {
   const recentTransactions = transactions.slice(-10);
