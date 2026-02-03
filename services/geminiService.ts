@@ -2,12 +2,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, Business } from "../types";
 
-// Always use the specified initialization pattern and assume API_KEY is available in process.env
-const ai = new GoogleGenAI({ apiKey: process.env.VITE_GEMINI_API_KEY });
-
-console.log("Gemini key:", import.meta.env.VITE_GEMINI_API_KEY);
-
+/**
+ * Generates a business insight using Gemini AI.
+ * Follows Google GenAI SDK best practices for browser environments.
+ */
 export async function getBusinessInsight(business: Business, transactions: Transaction[]): Promise<string> {
+  // Obtain API key exclusively from process.env.API_KEY as per environment requirements
+  const apiKey = process.env.API_KEY;
+
+  // Graceful fallback if the key is missing to prevent the app from crashing on load
+  if (!apiKey) {
+    console.warn("Gemini API Key is not set in environment variables.");
+    return "Tracking your finances is the first step toward business growth. Keep it up!";
+  }
+
   const recentTransactions = transactions.slice(-10);
   const sales = recentTransactions.filter(t => t.type === 'sale').reduce((acc, curr) => acc + curr.amount, 0);
   const expenses = recentTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
@@ -20,7 +28,12 @@ export async function getBusinessInsight(business: Business, transactions: Trans
   `;
 
   try {
-    // Generate content using gemini-3-flash-preview for basic text tasks with thinkingBudget set to 0 for lower latency
+    // Initialize AI instance inside the function to ensure the environment is ready 
+    // and to avoid top-level initialization errors.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // Using gemini-3-flash-preview for basic text tasks like tips and summarization.
+    // Set thinkingBudget to 0 for low-latency responses.
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -28,10 +41,11 @@ export async function getBusinessInsight(business: Business, transactions: Trans
         thinkingConfig: { thinkingBudget: 0 }
       }
     });
-    // Directly access the .text property from the response
-    return response.text || "Keep up the great work! Your records are looking good.";
+
+    // Access the .text property directly as it is a getter, not a method.
+    return response.text || "Your dedication to record-keeping is setting your business up for success.";
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "Every entry brings you closer to your business goals. Keep going!";
+    console.error("Gemini Insight Error:", error);
+    return "Great job documenting your business journey! Every entry counts towards your success.";
   }
 }
