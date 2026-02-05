@@ -1,5 +1,7 @@
 {
   "name": "DigiSHE",
   "description": "A simple digital record-keeping MVP for women-led MSMEs to track sales, expenses, and view weekly business performance with ease.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

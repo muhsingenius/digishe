@@ -12,6 +12,13 @@
     <script>
       // Polyfill process.env for browser environment to prevent crashes
       window.process = window.process || { env: {} };
+
+      // Prevent mouse wheel from changing number input values
+      document.addEventListener('wheel', function(event) {
+        if (document.activeElement && document.activeElement.type === 'number') {
+          document.activeElement.blur();
+        }
+      });
     </script>
     <style>
       body {
@@ -23,6 +30,18 @@
       .border-primary { border-color: #7c3aed; }
       .bg-sale { background-color: #10b981; }
       .bg-expense { background-color: #f43f5e; }
+
+      /* Hide spin-buttons for Chrome, Safari, Edge, Opera */
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      /* Hide spin-buttons for Firefox */
+      input[type=number] {
+        -moz-appearance: textfield;
+      }
     </style>
   <script type="importmap">
 {

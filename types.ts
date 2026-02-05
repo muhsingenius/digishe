@@ -27,8 +27,20 @@ export interface Transaction {
   note?: string;
 }
 
+export interface Saving {
+  id: string;
+  businessId: string;
+  amount: number;
+  destination: 'Bank' | 'Mobile Money';
+  date: string;
+}
+
 export interface AppState {
   user: User | null;
   business: Business | null;
   transactions: Transaction[];
+  savings: Saving[];
+  customCategories: string[];
+  entryCount: number;
+  showCategoryPrompt: boolean;
 }
