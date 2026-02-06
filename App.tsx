@@ -662,9 +662,16 @@ const Dashboard: React.FC<{
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-8 max-w-4xl mx-auto grid grid-cols-2 gap-4">
-        <Button variant="sale" size="lg" onClick={() => navigate('/record/sale')}><PlusCircle size={20} /> Record Sale</Button>
-        <Button variant="expense" size="lg" onClick={() => navigate('/record/expense')}><MinusCircle size={20} /> Record Expense</Button>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-8 max-w-4xl mx-auto grid grid-cols-3 gap-3">
+        <Button variant="sale" size="md" onClick={() => navigate('/record/sale')} className="px-1 shadow-sm">
+          <PlusCircle size={18} /> Sale
+        </Button>
+        <Button variant="expense" size="md" onClick={() => navigate('/record/expense')} className="px-1 shadow-sm">
+          <MinusCircle size={18} /> Expense
+        </Button>
+        <Button variant="outline" size="md" onClick={() => navigate('/savings')} className="px-1 !border-indigo-600 !text-indigo-600 shadow-sm">
+          <SavingsIcon size={18} /> Savings
+        </Button>
       </div>
     </div>
   );
