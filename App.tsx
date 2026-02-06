@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate, useParams, Link } from 'react-router-dom';
 import { User, Business, Transaction, Saving, AppState, BusinessType } from './types';
 import { Button, Card, Input, StatBox } from './components/UI';
 import { supabase } from './services/supabase';
@@ -49,7 +49,24 @@ import {
   Wallet,
   Building2,
   ChevronRight,
-  DollarSign
+  DollarSign,
+  FileX,
+  Banknote,
+  Settings2,
+  Zap,
+  LayoutDashboard,
+  Mic,
+  UserPlus,
+  Heart,
+  Quote,
+  CheckCircle,
+  Smartphone,
+  Globe,
+  Award,
+  Lightbulb,
+  Compass,
+  ArrowUpRight,
+  Home
 } from 'lucide-react';
 import { getBusinessInsight } from './services/geminiService';
 
@@ -82,6 +99,454 @@ const SavingsIcon: React.FC<{ size?: number; className?: string }> = ({ size = 2
     </div>
   </div>
 );
+
+// --- Landing Page Component ---
+const LandingPage: React.FC<{ user: User | null }> = ({ user }) => {
+  const navigate = useNavigate();
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const navHeight = 80; // height of the fixed header
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - navHeight;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const FeatureCard = ({ icon: Icon, title, desc }: { icon: any, title: string, desc: string }) => (
+    <Card className="hover:border-purple-200 hover:shadow-md transition-all group border-slate-100">
+      <div className="bg-purple-50 w-12 h-12 rounded-2xl flex items-center justify-center text-purple-600 mb-4 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+        <Icon size={24} />
+      </div>
+      <h4 className="text-lg font-bold text-slate-900 mb-2">{title}</h4>
+      <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+    </Card>
+  );
+
+  return (
+    <div className="min-h-screen bg-white selection:bg-purple-100 selection:text-purple-900">
+      {/* Navigation */}
+      <nav className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md z-[100] border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
+            <div className="bg-purple-600 p-2 rounded-xl text-white">
+              <Store size={24} />
+            </div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight hidden sm:inline">DigiShe</span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-6">
+            {/* Desktop Nav Links grouped with Auth Actions */}
+            <div className="hidden md:flex items-center gap-6">
+              <button 
+                onClick={() => scrollToSection('about')} 
+                className="text-slate-600 font-bold text-sm hover:text-purple-600 transition-colors"
+              >
+                About
+              </button>
+              <button 
+                onClick={() => scrollToSection('features')} 
+                className="text-slate-600 font-bold text-sm hover:text-purple-600 transition-colors"
+              >
+                Features
+              </button>
+              <div className="h-6 w-px bg-slate-100 mx-2" />
+            </div>
+
+            {user ? (
+              <Button size="md" onClick={() => navigate('/dashboard')}>My Dashboard</Button>
+            ) : (
+              <>
+                <button onClick={() => navigate('/login')} className="text-slate-600 font-bold text-sm px-2 sm:px-4 py-2 hover:text-purple-600 transition-colors">Login</button>
+                <Button size="md" onClick={() => navigate('/login')} className="text-sm sm:text-base">Join Pilot</Button>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="pt-40 pb-24 px-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-[600px] h-[600px] bg-purple-50 rounded-full blur-[120px] opacity-60 pointer-events-none" />
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="space-y-8 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider">
+              <Award size={14} /> Built by women, for women
+            </div>
+            <h1 className="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight">
+              Digital record-keeping <span className="text-purple-600">made simple</span> for women-led businesses
+            </h1>
+            <p className="text-xl text-slate-500 font-medium max-w-xl mx-auto lg:mx-0 leading-relaxed">
+              Track sales, expenses, and savings — even with no digital skills. Offline-first and designed for micro-entrepreneurs.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+              <Button size="xl" onClick={() => navigate('/login')} className="w-full sm:w-auto">Get Started <ArrowRight size={20} /></Button>
+              <Button size="xl" variant="outline" onClick={() => navigate('/login')} className="w-full sm:w-auto">Join the Pilot</Button>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="bg-gradient-to-br from-purple-100 to-indigo-100 rounded-[3rem] p-4 lg:p-12 animate-in slide-in-from-right-12 duration-1000">
+               <Card className="shadow-2xl border-none p-0 overflow-hidden scale-105">
+                 <div className="bg-purple-600 p-6 text-white flex justify-between items-center">
+                   <div className="flex items-center gap-2">
+                     <Store size={20} />
+                     <span className="font-bold">Business Hub</span>
+                   </div>
+                   <div className="flex items-center gap-1">
+                     <div className="w-2 h-2 rounded-full bg-white/40" />
+                     <div className="w-2 h-2 rounded-full bg-white/40" />
+                     <div className="w-2 h-2 rounded-full bg-white" />
+                   </div>
+                 </div>
+                 <div className="p-6 space-y-6">
+                   <div className="grid grid-cols-2 gap-4">
+                     <div className="h-24 bg-emerald-50 rounded-2xl p-4 flex flex-col justify-end">
+                       <TrendingUp className="text-emerald-500 mb-2" size={18} />
+                       <span className="text-[10px] font-black uppercase text-emerald-700">Daily Sales</span>
+                       <span className="text-lg font-black">$420.00</span>
+                     </div>
+                     <div className="h-24 bg-rose-50 rounded-2xl p-4 flex flex-col justify-end">
+                       <TrendingDown className="text-rose-500 mb-2" size={18} />
+                       <span className="text-[10px] font-black uppercase text-rose-700">Expenses</span>
+                       <span className="text-lg font-black">$120.00</span>
+                     </div>
+                   </div>
+                   <div className="bg-slate-50 h-32 rounded-2xl p-4 flex flex-col justify-center gap-2">
+                     <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                       <div className="w-[70%] h-full bg-purple-600" />
+                     </div>
+                     <span className="text-xs font-bold text-slate-500">Savings Target: 70% reached</span>
+                   </div>
+                 </div>
+               </Card>
+            </div>
+            <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-2xl shadow-xl flex items-center gap-4 border border-slate-100 animate-bounce duration-[3000ms]">
+              <div className="bg-emerald-500 p-2 rounded-lg text-white">
+                <CheckCircle size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-slate-900">Offline Ready</p>
+                <p className="text-[10px] text-slate-500">Works without data</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* The Problem Section */}
+      <section className="py-24 px-6 bg-slate-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center space-y-4 mb-16">
+            <h2 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">The Reality for MSMEs</h2>
+            <p className="text-slate-500 font-medium max-w-2xl mx-auto">Most women-led businesses are trapped in a cycle of informal cash trading.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { icon: FileX, title: "No Records", text: "Thousands of women run businesses without any structured paper or digital records." },
+              { icon: Banknote, title: "Blocked Loans", text: "Without income history, it's impossible to access formal bank loans or credit." },
+              { icon: Settings2, title: "Complex Tools", text: "Existing accounting apps are built for experts, not for first-time digital users." }
+            ].map((item, i) => (
+              <Card key={i} className="text-center p-10 space-y-4 border-none shadow-sm">
+                <div className="mx-auto bg-rose-50 text-rose-500 w-16 h-16 rounded-full flex items-center justify-center">
+                  <item.icon size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">{item.title}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">{item.text}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* What is DigiSHE (About Section) */}
+      <section id="about" className="py-24 px-6">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <h2 className="text-3xl lg:text-5xl font-black text-slate-900 leading-tight">DigiSHE is a digital tool for the modern woman trader.</h2>
+              <p className="text-lg text-slate-500 leading-relaxed font-medium">
+                We've stripped away the complexity of traditional bookkeeping to create an experience that feels as natural as sending a message.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { label: "Offline-First", icon: WifiOff, color: "bg-indigo-50 text-indigo-600" },
+                { label: "USSD Enabled", icon: Smartphone, color: "bg-emerald-50 text-emerald-600" },
+                { label: "Beginner Friendly", icon: Heart, color: "bg-rose-50 text-rose-600" },
+                { label: "Community Driven", icon: Users, color: "bg-purple-50 text-purple-600" }
+              ].map((pill, i) => (
+                <div key={i} className={`flex items-center gap-3 p-4 rounded-2xl ${pill.color} font-bold text-sm`}>
+                  <pill.icon size={20} />
+                  {pill.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-purple-600 rounded-[3rem] p-12 text-white space-y-8 relative overflow-hidden">
+             <Sparkles className="absolute top-0 right-0 w-32 h-32 text-white/10 -translate-y-1/2 translate-x-1/2" />
+             <div className="flex items-center gap-4">
+               <div className="bg-white/20 p-3 rounded-2xl">
+                 <Mic size={24} />
+               </div>
+               <div>
+                 <p className="text-sm font-bold uppercase tracking-widest opacity-70">New Feature</p>
+                 <p className="text-xl font-bold">Voice-Based Logging</p>
+               </div>
+             </div>
+             <p className="text-purple-100 font-medium text-lg leading-relaxed">
+               "Record my sale for today: 2 bags of maize, 50 Cedis each." DigiSHE processes your voice into a clean record automatically.
+             </p>
+             <div className="pt-4">
+               <div className="flex items-center -space-x-3">
+                 {[1,2,3,4].map(n => (
+                   <div key={n} className="w-10 h-10 rounded-full border-2 border-purple-600 bg-slate-200" />
+                 ))}
+                 <div className="pl-6 text-sm font-bold">Used by 500+ traders</div>
+               </div>
+             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Our Unique Approach Section */}
+      <section className="py-24 px-6 bg-purple-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div className="order-2 lg:order-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {[
+                  { icon: Compass, title: "Co-Created", desc: "Built alongside women entrepreneurs in Northern Ghana." },
+                  { icon: Lightbulb, title: "Growth Ready", desc: "Designed for business expansion, not just basic accounting." },
+                  { icon: ShieldCheck, title: "Data Secure", desc: "Your records are encrypted and always yours to control." },
+                  { icon: Users, title: "Community led", desc: "Local onboarding specialists ensure no one is left behind." }
+                ].map((approach, i) => (
+                  <div key={i} className="bg-white p-6 rounded-2xl shadow-sm space-y-3">
+                    <div className="text-purple-600 bg-purple-50 w-10 h-10 rounded-xl flex items-center justify-center">
+                      <approach.icon size={20} />
+                    </div>
+                    <h4 className="font-bold text-slate-900">{approach.title}</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">{approach.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="order-1 lg:order-2 space-y-6">
+              <h2 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">Built different from day one.</h2>
+              <p className="text-lg text-slate-600 leading-relaxed">
+                Unlike global tools, DigiSHE is localized for your context. We focus on "Growth Readiness"—preparing you to approach banks with confidence.
+              </p>
+              <ul className="space-y-4">
+                {[
+                  "No data? Record via USSD code",
+                  "Low literacy? Use voice commands",
+                  "No bank account? We help you start one"
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-slate-700 font-bold">
+                    <CheckCircle2 size={18} className="text-emerald-500" /> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Who DigiSHE is For */}
+      <section className="py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-3xl lg:text-4xl font-black text-slate-900">Who is it for?</h2>
+            <p className="text-slate-500 font-medium">We support women at every stage of their business journey.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { type: "Market Traders", label: "Fast logging for busy markets" },
+              { type: "Fashion Designers", label: "Track expensive fabric inputs" },
+              { type: "Rural Farmers", label: "Offline records for remote areas" },
+              { type: "Small Producers", label: "Monitor material costs & sales" }
+            ].map((audience, i) => (
+              <div key={i} className="group cursor-default bg-slate-50 p-8 rounded-3xl border border-transparent hover:border-purple-200 hover:bg-white transition-all text-center space-y-4">
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all">
+                  <UserIcon size={24} />
+                </div>
+                <h4 className="font-black text-slate-900">{audience.type}</h4>
+                <p className="text-xs text-slate-500 font-bold">{audience.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Key Features Section */}
+      <section id="features" className="py-24 px-6 bg-slate-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-3xl lg:text-4xl font-black text-slate-900">Simple Tools, Big Results</h2>
+            <p className="text-slate-500 font-medium">Everything you need, nothing you don't.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <FeatureCard icon={Zap} title="Sales in Seconds" desc="Tap and log. Record daily sales as they happen, no paper required." />
+            <FeatureCard icon={PiggyBank} title="Savings Tracking" desc="Categorize your savings into Bank or Mobile Money for a clear overview." />
+            <FeatureCard icon={LayoutDashboard} title="Weekly Summary" desc="See how your business performed each week with simple, colorful charts." />
+            <FeatureCard icon={Smartphone} title="Works Everywhere" desc="Use our mobile app or standard USSD on any basic phone." />
+            <FeatureCard icon={UserPlus} title="No Complex Setup" desc="Register with just your phone number. No email or password needed." />
+            <FeatureCard icon={Globe} title="Offline Sync" desc="Records are saved locally and synced automatically when you have data." />
+          </div>
+        </div>
+      </section>
+
+      {/* Impact & Metrics */}
+      <section className="py-24 px-6 bg-purple-900 text-white overflow-hidden relative">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="space-y-8 z-10">
+            <h2 className="text-4xl font-black">Our Impact Journey</h2>
+            <p className="text-xl text-purple-100 leading-relaxed font-medium">We are more than just an app. We are building the data bridge for financial inclusion.</p>
+            <div className="grid grid-cols-2 gap-8 pt-8">
+              <div>
+                <p className="text-5xl font-black mb-2 tracking-tighter">80%</p>
+                <p className="text-purple-200 text-sm font-bold uppercase tracking-widest">Digital Transition</p>
+              </div>
+              <div>
+                <p className="text-5xl font-black mb-2 tracking-tighter">15+</p>
+                <p className="text-purple-200 text-sm font-bold uppercase tracking-widest">Communities</p>
+              </div>
+            </div>
+          </div>
+          <div className="relative z-10">
+            <Card className="bg-white/10 backdrop-blur-md border-white/20 p-10 space-y-8 text-white">
+              <div className="flex items-center gap-4">
+                 <div className="bg-purple-500 p-4 rounded-3xl">
+                   <Users size={32} />
+                 </div>
+                 <div>
+                   <h4 className="text-2xl font-black">500+ Participants</h4>
+                   <p className="text-purple-200 font-medium">In our 2024 active pilot phase</p>
+                 </div>
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-purple-300">Early Indicators</p>
+                <div className="space-y-3">
+                  {['92% increased confidence', '65% better expense awareness', '40% started formal bank savings'].map((stat, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="bg-emerald-400 w-5 h-5 rounded-full flex items-center justify-center">
+                        <Check size={12} className="text-purple-900 font-bold" />
+                      </div>
+                      <span className="font-bold text-sm">{stat}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-purple-600 rounded-full -translate-y-1/2 translate-x-1/2 blur-[100px] opacity-20 pointer-events-none" />
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+             <h2 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">Voices of DigiSHE</h2>
+             <p className="text-slate-500 font-medium">Real impact for real entrepreneurs.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[
+              { text: "This is the first app I can actually understand. I don't need my children to help me record my sales anymore.", name: "Aisha M.", role: "Market Trader" },
+              { text: "Now I know exactly how much I spent on fabric and how much profit I made. I feel like a real CEO.", name: "Fatima K.", role: "Fashion Designer" }
+            ].map((t, i) => (
+              <Card key={i} className="p-10 space-y-6 relative border-slate-100 hover:border-purple-200 transition-all">
+                <Quote className="text-purple-100 absolute top-8 right-8" size={48} />
+                <p className="text-lg text-slate-700 font-medium italic relative z-10 leading-relaxed">"{t.text}"</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full" />
+                  <div>
+                    <p className="font-black text-slate-900">{t.name}</p>
+                    <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">{t.role}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Partners */}
+      <section className="py-24 px-6 border-y border-slate-50">
+        <div className="max-w-6xl mx-auto">
+          <p className="text-center text-xs font-black text-slate-400 uppercase tracking-[0.3em] mb-12">Proudly Supported By</p>
+          <div className="flex flex-wrap justify-center items-center gap-12 lg:gap-24 opacity-60 hover:opacity-100 transition-opacity">
+            <span className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <Smartphone className="text-purple-600" /> Northern Girl Initiative
+            </span>
+            <span className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <Globe className="text-emerald-600" /> Jameelullah Ltd
+            </span>
+            <span className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <Award className="text-indigo-600" /> Community Groups
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-24 px-6 text-center">
+        <div className="max-w-3xl mx-auto space-y-10">
+          <h2 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">Start building your business records today</h2>
+          <p className="text-xl text-slate-500 font-medium leading-relaxed">
+            Join the movement of women entrepreneurs taking control of their financial future.
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+            <Button size="xl" onClick={() => navigate('/login')} className="w-full sm:w-auto px-12 shadow-purple-200">Join the DigiSHE Pilot</Button>
+            <Button size="xl" variant="outline" className="w-full sm:w-auto px-12">Partner With Us</Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-900 text-white py-16 px-6">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="col-span-1 md:col-span-2 space-y-6">
+            <div className="flex items-center gap-2">
+              <div className="bg-purple-600 p-2 rounded-xl text-white">
+                <Store size={24} />
+              </div>
+              <span className="text-2xl font-black tracking-tight">DigiShe</span>
+            </div>
+            <p className="text-slate-400 max-w-sm font-medium">Empowering women entrepreneurs with digital tools designed for accessibility and growth.</p>
+          </div>
+          <div className="space-y-4">
+            <h5 className="font-black uppercase tracking-widest text-xs text-slate-500">Links</h5>
+            <ul className="space-y-2 text-sm font-bold text-slate-300">
+              <li><button onClick={() => navigate('/login')} className="hover:text-purple-400">Login</button></li>
+              <li><button onClick={() => navigate('/login')} className="hover:text-purple-400">Join Pilot</button></li>
+              <li><a href="#" className="hover:text-purple-400">About DigiSHE</a></li>
+            </ul>
+          </div>
+          <div className="space-y-4">
+            <h5 className="font-black uppercase tracking-widest text-xs text-slate-500">Contact</h5>
+            <ul className="space-y-2 text-sm font-bold text-slate-300">
+              <li>hello@digishe.org</li>
+              <li>+233 503 088 600</li>
+              <li>Tamale, Ghana</li>
+            </ul>
+          </div>
+        </div>
+        <div className="max-w-6xl mx-auto mt-16 pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-xs font-bold uppercase tracking-widest">
+          <p>© 2025 DigiSHE. All rights reserved.</p>
+          <div className="flex gap-8">
+            <a href="#" className="hover:text-white transition-colors">Privacy</a>
+            <a href="#" className="hover:text-white transition-colors">Terms</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
 
 // --- SQL Setup Script ---
 const SQL_SETUP = `-- Copy this to Supabase SQL Editor and click RUN
@@ -198,7 +663,7 @@ const SplashScreen: React.FC = () => (
 
 const LogoutConfirmModal: React.FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onConfirm, onCancel }) => (
   <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-    <Card className="max-w-sm w-full p-8 text-center space-y-6 shadow-2xl border-none">
+    <Card className="max-sm w-full p-8 text-center space-y-6 shadow-2xl border-none">
       <div className="flex justify-center">
         <div className="bg-rose-50 p-4 rounded-full text-rose-500">
           <LogOut size={40} />
@@ -394,6 +859,7 @@ const AuthPage: React.FC<{ onAuthComplete: (userData: any) => void; onMissingTab
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let interval: any;
@@ -433,9 +899,17 @@ const AuthPage: React.FC<{ onAuthComplete: (userData: any) => void; onMissingTab
   };
 
   return (
-    <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-6 text-white text-center">
+    <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-6 text-white text-center relative">
+      {/* Back to Home Button */}
+      <button 
+        onClick={() => navigate('/')}
+        className="absolute top-6 left-6 flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm transition-all active:scale-95"
+      >
+        <Home size={18} /> Back to Home
+      </button>
+
       <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 cursor-pointer" onClick={() => navigate('/')}>
           <div className="bg-white p-4 rounded-3xl shadow-xl"><Store className="text-purple-600 w-12 h-12" /></div>
           <h1 className="text-4xl font-black">DigiShe</h1>
           <p className="text-purple-100 text-lg font-medium">Digital bookkeeping for women entrepreneurs</p>
@@ -538,7 +1012,7 @@ const Dashboard: React.FC<{
       <header className="bg-white p-6 border-b border-slate-100 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="bg-purple-600 p-2 rounded-xl"><Store className="text-white" size={20} /></div>
+            <div className="bg-purple-600 p-2 rounded-xl cursor-pointer" onClick={() => navigate('/')}><Store className="text-white" size={20} /></div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-slate-900">{state.business?.name}</h1>
@@ -1128,6 +1602,7 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
+        <Route path="/" element={<LandingPage user={user} />} />
         <Route path="/login" element={!user ? <AuthPage onAuthComplete={(p) => setState(prev => ({...prev, user: { phoneNumber: p.phone, name: p.name, isAdmin: p.is_admin, hasCompletedOnboarding: p.has_completed_onboarding }}))} onMissingTables={() => setShowSetup(true)} /> : (user.hasCompletedOnboarding ? (business?.isActive ? <Navigate to="/dashboard" replace /> : <Navigate to="/pending" replace />) : <Navigate to="/onboarding" replace />)} />
         <Route path="/onboarding" element={user ? (user.hasCompletedOnboarding ? <Navigate to="/dashboard" replace /> : <OnboardingPage onComplete={handleOnboarding} />) : <Navigate to="/login" replace />} />
         <Route path="/pending" element={user?.hasCompletedOnboarding ? (business?.isActive ? <Navigate to="/dashboard" replace /> : <PendingActivationPage onLogout={() => setShowLogoutConfirm(true)} />) : <Navigate to="/login" replace />} />
@@ -1136,7 +1611,7 @@ export default function App() {
         <Route path="/savings" element={user?.hasCompletedOnboarding ? (business?.isActive ? <SavingsHub state={state} /> : <Navigate to="/pending" replace />) : <Navigate to="/login" replace />} />
         <Route path="/record-saving" element={user?.hasCompletedOnboarding ? (business?.isActive ? <RecordSavingPage onSave={addSaving} /> : <Navigate to="/pending" replace />) : <Navigate to="/login" replace />} />
         <Route path="/record/:type" element={<RecordRouteHandler user={user} business={business} customCategories={state.customCategories} transactions={state.transactions} onSave={addTransaction} />} />
-        <Route path="*" element={<Navigate to={user ? (user.hasCompletedOnboarding ? (business?.isActive ? "/dashboard" : "/pending") : "/onboarding") : "/login"} replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {showSetup && <DatabaseSetupModal onClose={() => setShowSetup(false)} />}
       {showLogoutConfirm && <LogoutConfirmModal onConfirm={performLogout} onCancel={() => setShowLogoutConfirm(false)} />}
