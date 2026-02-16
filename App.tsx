@@ -92,10 +92,10 @@ const initialState: AppState = {
  * Custom icon component that overlays a dollar sign onto the PiggyBank icon.
  */
 const SavingsIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = "" }) => (
-  <div className={`relative inline-flex items-center justify-center GHS{className}`} style={{ width: size, height: size }}>
+  <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
     <PiggyBank size={size} />
     <div className="absolute inset-0 flex items-center justify-center pt-[12%] pl-[4%] pointer-events-none">
-      <span className="font-black leading-none select-none" style={{ fontSize: `GHS{size * 0.35}px` }}>GHS</span>
+      <span className="font-black leading-none select-none" style={{ fontSize: `${size * 0.35}px` }}>$</span>
     </div>
   </div>
 );
