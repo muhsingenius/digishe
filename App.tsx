@@ -92,10 +92,10 @@ const initialState: AppState = {
  * Custom icon component that overlays a dollar sign onto the PiggyBank icon.
  */
 const SavingsIcon: React.FC<{ size?: number; className?: string }> = ({ size = 24, className = "" }) => (
-  <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
+  <div className={`relative inline-flex items-center justify-center GHS{className}`} style={{ width: size, height: size }}>
     <PiggyBank size={size} />
     <div className="absolute inset-0 flex items-center justify-center pt-[12%] pl-[4%] pointer-events-none">
-      <span className="font-black leading-none select-none" style={{ fontSize: `${size * 0.35}px` }}>$</span>
+      <span className="font-black leading-none select-none" style={{ fontSize: `GHS{size * 0.35}px` }}>GHS</span>
     </div>
   </div>
 );
@@ -208,12 +208,12 @@ const LandingPage: React.FC<{ user: User | null }> = ({ user }) => {
                      <div className="h-24 bg-emerald-50 rounded-2xl p-4 flex flex-col justify-end">
                        <TrendingUp className="text-emerald-500 mb-2" size={18} />
                        <span className="text-[10px] font-black uppercase text-emerald-700">Daily Sales</span>
-                       <span className="text-lg font-black">$420.00</span>
+                       <span className="text-lg font-black">GHS420.00</span>
                      </div>
                      <div className="h-24 bg-rose-50 rounded-2xl p-4 flex flex-col justify-end">
                        <TrendingDown className="text-rose-500 mb-2" size={18} />
                        <span className="text-[10px] font-black uppercase text-rose-700">Expenses</span>
-                       <span className="text-lg font-black">$120.00</span>
+                       <span className="text-lg font-black">GHS120.00</span>
                      </div>
                    </div>
                    <div className="bg-slate-50 h-32 rounded-2xl p-4 flex flex-col justify-center gap-2">
@@ -280,7 +280,7 @@ const LandingPage: React.FC<{ user: User | null }> = ({ user }) => {
                 { label: "Beginner Friendly", icon: Heart, color: "bg-rose-50 text-rose-600" },
                 { label: "Community Driven", icon: Users, color: "bg-purple-50 text-purple-600" }
               ].map((pill, i) => (
-                <div key={i} className={`flex items-center gap-3 p-4 rounded-2xl ${pill.color} font-bold text-sm`}>
+                <div key={i} className={`flex items-center gap-3 p-4 rounded-2xl GHS{pill.color} font-bold text-sm`}>
                   <pill.icon size={20} />
                   {pill.label}
                 </div>
@@ -638,7 +638,7 @@ const mapArkeselError = (code: string | number) => {
     '1104': 'Incorrect verification code. Please try again.',
     '1105': 'Code expired. Please request a new one.',
   };
-  return errors[codeStr] || `Error: ${codeStr}`;
+  return errors[codeStr] || `Error: GHS{codeStr}`;
 };
 
 // --- Components ---
@@ -828,8 +828,8 @@ const AdminDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, 
                       <span className="text-xs text-slate-400 font-medium">{b.location}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${b.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${b.is_active ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider GHS{b.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full GHS{b.is_active ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                         {b.is_active ? 'Active' : 'Pending'}
                       </span>
                     </td>
@@ -940,9 +940,9 @@ const AuthPage: React.FC<{ onAuthComplete: (userData: any) => void; onMissingTab
                 <button 
                   onClick={handleContinue} 
                   disabled={resendTimer > 0 || isLoading}
-                  className={`text-sm font-bold transition-colors ${resendTimer > 0 ? 'text-slate-300' : 'text-purple-600 hover:text-purple-700'}`}
+                  className={`text-sm font-bold transition-colors GHS{resendTimer > 0 ? 'text-slate-300' : 'text-purple-600 hover:text-purple-700'}`}
                 >
-                  {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend Code'}
+                  {resendTimer > 0 ? `Resend code in GHS{resendTimer}s` : 'Resend Code'}
                 </button>
                 <button onClick={() => setStep('input')} className="text-slate-400 font-medium text-xs hover:text-slate-600">Edit Phone Number</button>
               </div>
@@ -981,7 +981,7 @@ const OnboardingPage: React.FC<{ onComplete: (business: Business) => Promise<voi
           <Input label="Business Name" placeholder="e.g. Mama's Kitchen" value={name} onChange={(e) => setName(e.target.value)} disabled={isSaving} />
           <Input label="Business Location" placeholder="e.g. Makola Market" value={location} onChange={(e) => setLocation(e.target.value)} disabled={isSaving} />
           <div className="grid grid-cols-2 gap-2">
-            {businessTypes.map(t => <button key={t} type="button" onClick={() => setType(t)} className={`px-4 py-3 rounded-xl border text-sm font-bold ${type === t ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white text-slate-600'}`}>{t}</button>)}
+            {businessTypes.map(t => <button key={t} type="button" onClick={() => setType(t)} className={`px-4 py-3 rounded-xl border text-sm font-bold GHS{type === t ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white text-slate-600'}`}>{t}</button>)}
           </div>
           <Button size="xl" className="w-full" onClick={handleSubmit} disabled={!name || isSaving}>Create My Business</Button>
         </Card>
@@ -1072,7 +1072,7 @@ const Dashboard: React.FC<{
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 font-medium">My Savings</p>
-                  <p className="text-xl font-bold text-slate-900">${stats.saved.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-slate-900">GHS{stats.saved.toLocaleString()}</p>
                 </div>
               </div>
               <ChevronRight className="text-slate-300 group-hover:text-indigo-500 transition-colors" size={24} />
@@ -1085,14 +1085,14 @@ const Dashboard: React.FC<{
               <TrendingUp className="text-emerald-500" size={24} />
               <div>
                 <p className="text-xs font-bold text-emerald-700 uppercase">Sales</p>
-                <p className="text-lg font-black text-slate-900">${stats.sales.toLocaleString()}</p>
+                <p className="text-lg font-black text-slate-900">GHS{stats.sales.toLocaleString()}</p>
               </div>
            </Card>
            <Card className="flex items-center gap-4 bg-rose-50 border-rose-100">
               <TrendingDown className="text-rose-500" size={24} />
               <div>
                 <p className="text-xs font-bold text-rose-700 uppercase">Expenses</p>
-                <p className="text-lg font-black text-slate-900">${stats.expenses.toLocaleString()}</p>
+                <p className="text-lg font-black text-slate-900">GHS{stats.expenses.toLocaleString()}</p>
               </div>
            </Card>
         </div>
@@ -1121,7 +1121,7 @@ const Dashboard: React.FC<{
             {state.transactions.slice().reverse().slice(0, 5).map(t => (
               <div key={t.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${t.type === 'sale' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                  <div className={`p-2 rounded-lg GHS{t.type === 'sale' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                     {t.type === 'sale' ? <PlusCircle size={18} /> : <MinusCircle size={18} />}
                   </div>
                   <div>
@@ -1129,7 +1129,7 @@ const Dashboard: React.FC<{
                     <p className="text-xs text-slate-400">{new Date(t.date).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <p className={`font-bold ${t.type === 'sale' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'sale' ? '+' : '-'}${t.amount.toLocaleString()}</p>
+                <p className={`font-bold GHS{t.type === 'sale' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'sale' ? '+' : '-'}GHS{t.amount.toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -1175,7 +1175,7 @@ const SavingsHub: React.FC<{ state: AppState }> = ({ state }) => {
         <Card className="bg-indigo-600 text-white border-none p-8 flex flex-col items-center gap-2 shadow-xl relative overflow-hidden">
           <SavingsIcon size={128} className="absolute -right-4 -top-4 text-white/10" />
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-indigo-200">Total Funds Saved</p>
-          <p className="text-5xl font-black">${totals.total.toLocaleString()}</p>
+          <p className="text-5xl font-black">GHS{totals.total.toLocaleString()}</p>
         </Card>
 
         <div className="grid grid-cols-2 gap-4">
@@ -1185,7 +1185,7 @@ const SavingsHub: React.FC<{ state: AppState }> = ({ state }) => {
             </div>
             <div className="text-center">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Bank</p>
-              <p className="text-xl font-black text-slate-900">${totals.bank.toLocaleString()}</p>
+              <p className="text-xl font-black text-slate-900">GHS{totals.bank.toLocaleString()}</p>
             </div>
           </Card>
           <Card className="flex flex-col items-center p-6 gap-3 border-none shadow-md">
@@ -1194,7 +1194,7 @@ const SavingsHub: React.FC<{ state: AppState }> = ({ state }) => {
             </div>
             <div className="text-center">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">MoMo</p>
-              <p className="text-xl font-black text-slate-900">${totals.momo.toLocaleString()}</p>
+              <p className="text-xl font-black text-slate-900">GHS{totals.momo.toLocaleString()}</p>
             </div>
           </Card>
         </div>
@@ -1209,7 +1209,7 @@ const SavingsHub: React.FC<{ state: AppState }> = ({ state }) => {
                  {recentSavings.map(s => (
                    <div key={s.id} className="flex items-center justify-between p-5 hover:bg-slate-50/50 transition-colors">
                      <div className="flex items-center gap-4">
-                       <div className={`p-2 rounded-xl ${s.destination === 'Bank' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                       <div className={`p-2 rounded-xl GHS{s.destination === 'Bank' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
                          {s.destination === 'Bank' ? <Building2 size={20} /> : <Wallet size={20} />}
                        </div>
                        <div>
@@ -1217,7 +1217,7 @@ const SavingsHub: React.FC<{ state: AppState }> = ({ state }) => {
                          <p className="text-xs text-slate-400 font-medium">{new Date(s.date).toLocaleDateString()}</p>
                        </div>
                      </div>
-                     <p className="font-black text-slate-900 text-lg">${s.amount.toLocaleString()}</p>
+                     <p className="font-black text-slate-900 text-lg">GHS{s.amount.toLocaleString()}</p>
                    </div>
                  ))}
                </div>
@@ -1275,13 +1275,13 @@ const RecordSavingPage: React.FC<{ onSave: (amount: number, destination: 'Bank' 
              <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
                 <button 
                   onClick={() => setDestination('Bank')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all ${destination === 'Bank' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/50'}`}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all GHS{destination === 'Bank' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/50'}`}
                 >
                   <Building2 size={20} /> Bank
                 </button>
                 <button 
                   onClick={() => setDestination('Mobile Money')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all ${destination === 'Mobile Money' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/50'}`}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all GHS{destination === 'Mobile Money' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:bg-slate-200/50'}`}
                 >
                   <Wallet size={20} /> MoMo
                 </button>
@@ -1291,7 +1291,7 @@ const RecordSavingPage: React.FC<{ onSave: (amount: number, destination: 'Bank' 
           <div className="space-y-1.5">
              <label className="text-sm font-bold text-slate-700 ml-1">Amount to Save</label>
              <div className="relative">
-                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-300">$</span>
+                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-300">GHS</span>
                 <input 
                   type="number"
                   className="w-full pl-12 pr-6 py-6 rounded-2xl border-2 border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-4xl font-black tracking-tight transition-all"
@@ -1411,8 +1411,8 @@ const RecordPage: React.FC<{
                         <td className="px-5 py-4 text-sm font-bold text-slate-800 capitalize">
                           {t.category}
                         </td>
-                        <td className={`px-5 py-4 text-sm font-black text-right ${type === 'sale' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          ${t.amount.toLocaleString()}
+                        <td className={`px-5 py-4 text-sm font-black text-right GHS{type === 'sale' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          GHS{t.amount.toLocaleString()}
                         </td>
                       </tr>
                     ))}
