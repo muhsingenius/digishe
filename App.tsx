@@ -1061,7 +1061,7 @@ const Dashboard: React.FC<{
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <StatBox label="Current Balance" value={`$GHS{stats.balance.toLocaleString()}`} color="bg-purple-500" icon={<TrendingUp size={20} />} />
+          <StatBox label="Current Balance" value={`GHS${stats.balance.toLocaleString()}`} color="bg-purple-500" icon={<TrendingUp size={20} />} />
           <div className="cursor-pointer group" onClick={() => navigate('/savings')}>
             <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between group-hover:border-indigo-300 transition-all active:scale-[0.98]">
               <div className="flex items-center gap-4">
