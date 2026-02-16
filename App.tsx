@@ -940,9 +940,9 @@ const AuthPage: React.FC<{ onAuthComplete: (userData: any) => void; onMissingTab
                 <button 
                   onClick={handleContinue} 
                   disabled={resendTimer > 0 || isLoading}
-                  className={`text-sm font-bold transition-colors GHS{resendTimer > 0 ? 'text-slate-300' : 'text-purple-600 hover:text-purple-700'}`}
+                  className={`text-sm font-bold transition-colors ${resendTimer > 0 ? 'text-slate-300' : 'text-purple-600 hover:text-purple-700'}`}
                 >
-                  {resendTimer > 0 ? `Resend code in GHS{resendTimer}s` : 'Resend Code'}
+                  {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend Code'}
                 </button>
                 <button onClick={() => setStep('input')} className="text-slate-400 font-medium text-xs hover:text-slate-600">Edit Phone Number</button>
               </div>
