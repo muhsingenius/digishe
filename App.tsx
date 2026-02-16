@@ -1022,13 +1022,7 @@ const Dashboard: React.FC<{
             </div>
           </div>
           <div className="flex items-center gap-4">
-           //--- <button 
-              onClick={() => navigate('/savings')} 
-              className="p-2 text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors"
-              title="Savings Hub"
-            >
-              <SavingsIcon size={24} />
-            </button> ---//
+           
             <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors"><LogOut size={24} /></button>
           </div>
         </div>
