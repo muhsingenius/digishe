@@ -9,22 +9,26 @@ export interface User {
 }
 
 export interface Business {
-  id?: string;
+  id: string; // Required for sync
+  user_id?: string;
   name: string;
   type: BusinessType;
   location?: string;
   startDate: string;
   isActive: boolean;
+  synced?: boolean;
 }
 
 export interface Transaction {
   id: string;
   userId: string;
+  businessId: string;
   type: 'sale' | 'expense';
   amount: number;
   category: string;
   date: string;
   note?: string;
+  synced?: boolean;
 }
 
 export interface Saving {
@@ -33,6 +37,7 @@ export interface Saving {
   amount: number;
   destination: 'Bank' | 'Mobile Money';
   date: string;
+  synced?: boolean;
 }
 
 export interface AppState {
@@ -43,4 +48,6 @@ export interface AppState {
   customCategories: string[];
   entryCount: number;
   showCategoryPrompt: boolean;
+  isOnline: boolean;
+  isSyncing: boolean;
 }

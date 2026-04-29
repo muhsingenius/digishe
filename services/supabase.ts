@@ -4,17 +4,31 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * Robustly fetch environment variables with hardcoded fallbacks 
  * using the credentials provided by the user.
+ * Supports standard and VITE_ prefixed keys.
  */
 const getEnvVar = (key: string): string | undefined => {
+  const viteKey = `VITE_${key}`;
+  
   // Check global process
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env[viteKey]) return process.env[viteKey];
+    if (process.env[key]) return process.env[key];
   }
+  
   // Check window.process
   const windowProcess = (window as any).process;
-  if (windowProcess && windowProcess.env && windowProcess.env[key]) {
-    return windowProcess.env[key];
+  if (windowProcess && windowProcess.env) {
+    if (windowProcess.env[viteKey]) return windowProcess.env[viteKey];
+    if (windowProcess.env[key]) return windowProcess.env[key];
   }
+  
+  // Check import.meta.env (Vite standard)
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv) {
+    if (metaEnv[viteKey]) return metaEnv[viteKey];
+    if (metaEnv[key]) return metaEnv[key];
+  }
+
   return undefined;
 };
 

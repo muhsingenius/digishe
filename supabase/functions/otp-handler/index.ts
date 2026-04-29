@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -8,50 +9,58 @@ const corsHeaders = {
 }
 
 /**
- * Normalizes phone numbers to a standard format (e.g., 233503088600).
+ * Normalizes phone numbers specifically for Ghana (233).
+ * Identical logic to the frontend to prevent duplicate accounts.
  */
 function normalizePhone(phone: string): string {
   let cleaned = phone.replace(/\D/g, '');
   
-  // If it starts with 0 and is 10 digits, it's a local Ghana number
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    cleaned = '233' + cleaned.substring(1);
-  } 
-  // If it's 9 digits, it's likely a local number without the leading zero
-  else if (cleaned.length === 9) {
-    cleaned = '233' + cleaned;
+  if (cleaned.startsWith('233')) {
+    cleaned = cleaned.substring(3);
   }
-  return cleaned;
+  
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  return '233' + cleaned;
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { action, phone, code, name, mode } = await req.json()
-    // Fix: Access Deno through globalThis to avoid "Cannot find name 'Deno'" compiler error
+    const body = await req.json().catch(() => ({}));
+    const { action, phone, code, name, mode } = body;
+    
     const env = (globalThis as any).Deno.env
     const ARKESEL_KEY = env.get('ARKESEL_API_KEY')
     const SUPABASE_URL = env.get('SUPABASE_URL')
     const SERVICE_KEY = env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!ARKESEL_KEY) throw new Error('ARKESEL_API_KEY is missing in Supabase Secrets.')
+    if (!SUPABASE_URL) throw new Error('SUPABASE_URL is missing in Supabase Secrets.')
+    if (!SERVICE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY is missing in Supabase Secrets.')
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
+
+    if (!phone) throw new Error('Phone number is required.')
 
     // Strictly normalize the phone number before any logic
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone || normalizedPhone.length < 10) {
-      throw new Error('Invalid phone number format provided.');
+      throw new Error(`Invalid phone number format: ${phone}`);
     }
 
     if (action === 'send') {
       // Step 1: Check if user exists
-      const { data: profile } = await supabase
+      const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .select('id')
         .eq('phone', normalizedPhone)
         .maybeSingle();
+
+      if (pErr) console.error('Profile lookup error:', pErr);
 
       // Step 2: Validate against the requested mode
       if (mode === 'login' && !profile) {
@@ -90,26 +99,50 @@ serve(async (req) => {
           type: 'numeric'
         }),
       })
-      const result = await response.json();
+      
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Arkesel Send Response was not JSON: ${text.substring(0, 100)}`);
+      }
+      
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     if (action === 'verify') {
-      console.log(`Verifying OTP for normalized number: ${normalizedPhone}`);
+      if (!code) throw new Error('OTP code is required for verification.');
+      
+      console.log(`Verifying OTP for normalized number: ${normalizedPhone} with code: ${code}`);
       const response = await fetch('https://sms.arkesel.com/api/otp/verify', {
         method: 'POST',
         headers: { 'api-key': ARKESEL_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, number: normalizedPhone }),
+        // Try both 'code' and 'otp' just in case Arkesel changed their API
+        body: JSON.stringify({ otp: code, code, number: normalizedPhone }),
       })
-      const result = await response.json()
+      
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Arkesel Verify Response was not JSON: ${text.substring(0, 100)}`);
+      }
 
-      if (result.code === '1100' || result.code === 1100) {
+      // Arkesel success code is 1100.
+      if (result.code === '1100' || result.code === 1100 || result.status === 'success') {
         // ALWAYS use normalizedPhone for DB lookups and inserts
-        let { data: profile } = await supabase
+        let { data: profile, error: fErr } = await supabase
           .from('profiles')
           .select('*')
           .eq('phone', normalizedPhone)
           .maybeSingle()
+
+        if (fErr) {
+          console.error('Fetch profile error during verify:', fErr);
+          throw new Error(`Database error fetching profile: ${fErr.message}`);
+        }
 
         if (!profile) {
           console.log(`Creating new profile with normalized number: ${normalizedPhone}`);
@@ -123,7 +156,10 @@ serve(async (req) => {
             .select()
             .single()
           
-          if (iErr) throw iErr
+          if (iErr) {
+            console.error('Insert profile error:', iErr);
+            throw new Error(`Database error creating profile: ${iErr.message}`);
+          }
           profile = newP
         }
         
@@ -132,15 +168,20 @@ serve(async (req) => {
         })
       }
       
+      // If code is not successful, return 200 with success: false
       return new Response(JSON.stringify({ success: false, ...result }), { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
     
-    throw new Error('Invalid action requested.');
+    throw new Error(`Invalid action requested: ${action}`);
   } catch (error) {
     console.error(`Edge Function Error: ${error.message}`);
-    return new Response(JSON.stringify({ error: error.message }), { 
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message,
+      details: error.stack
+    }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
       status: 400 
     })
