@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-slate-50 text-slate-900;
+  }
+}
+
+/* Custom Utilities based on index.html head styles */
+.bg-primary { @apply bg-[#7c3aed]; }
+.text-primary { @apply text-[#7c3aed]; }
+.border-primary { @apply border-[#7c3aed]; }
+.bg-sale { @apply bg-emerald-500; }
+.bg-expense { @apply bg-rose-500; }
+
+/* Hide spin-buttons for Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide spin-buttons for Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.markdown-body {
+  @apply text-slate-700 leading-relaxed;
+}
+
+.markdown-body h1 { @apply text-2xl font-black mb-4; }
+.markdown-body h2 { @apply text-xl font-bold mb-3 mt-6; }
+.markdown-body p { @apply mb-4; }
+.markdown-body ul { @apply list-disc pl-6 mb-4; }
+.markdown-body li { @apply mb-2; }
