@@ -7,20 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-      // Polyfill process.env for browser environment to prevent crashes
-      window.process = window.process || { env: {} };
-
-      // Prevent mouse wheel from changing number input values
-      document.addEventListener('wheel', function(event) {
-        if (document.activeElement && document.activeElement.type === 'number') {
-          document.activeElement.blur();
-        }
-      });
-    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
